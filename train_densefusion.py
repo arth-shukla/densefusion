@@ -161,6 +161,7 @@ def train(
                 batch_size=batch_size,
                 acc_req=acc_req,
                 run_val_every=run_val_every,
+                n_gpu=torch.cuda.device_count(),
             )
         )
 
