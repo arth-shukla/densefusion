@@ -1,3 +1,5 @@
+import argparse
+from typing import Optional
 import torch
 import torch.nn as nn
 import numpy as np
@@ -250,16 +252,34 @@ def run_training(
     )
 
 if __name__ == '__main__':
+
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument('-b', '--batches', type=int, default=16)
+    parser.add_argument('-e', '--epochs', type=int, default=1000)
+    parser.add_argument('-l', '--lr', type=float, default=0.0001)
+    parser.add_argument('--acc_req', type=float, default=0.95)
+    parser.add_argument('--val_every', type=int, default=3)
+    parser.add_argument('-c', '--checkpoint_dir', type=str, default='checkpoints/densefusion')
+    parser.add_argument('--load_checkpoint', default=None)
+    parser.add_argument('-w', '--wandb', type=bool, default=True)
+    parser.add_argument('--print_batch_metrics', type=bool, default=True)
+    parser.add_argument('--run_name', type=str, default='dfnet')
+
+    args = parser.parse_args()
+
+    print(args)
+
     run_training(
         DenseFuseNet, densefusion_symmetry_unaware_loss,
-        batch_size = 16,
-        epochs = 1000,
-        lr = 0.0001,
-        acc_req = 0.95,
-        run_val_every = 3,
-        checkpoint_dir = '/arshukla-fast-vol-1/densefusion/checkpoints/densefusion',
-        # load_checkpoint = 'dfnet-sym_unaware-resume_0bda885f-7b23-4981-8e4c-c9c4ea49c3af',
-        wandb_logs=True, 
-        print_batch_metrics=True,
-        run_name = 'dfnet-sym_unaware-mgpu'
+        batch_size = args.batches,
+        epochs = args.epochs,
+        lr = args.lr,
+        acc_req = args.acc_req,
+        run_val_every = args.val_every,
+        checkpoint_dir = args.checkpoint_dir,
+        load_checkpoint = args.load_checkpoint,
+        wandb_logs = args.wandb, 
+        print_batch_metrics = args.print_batch_metrics,
+        run_name = args.run_name,
     )
