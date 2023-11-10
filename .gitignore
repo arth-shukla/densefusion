@@ -166,6 +166,7 @@ demos
 nautilus
 
 nohup.out
+nohup.out.old
 checkpoints
 
 processed_data_new
@@ -173,3 +174,7 @@ processed_data_new
 wandb/
 wandb/*
 processed_data_new.tar.gz
+hw2.ipynb
+raw_data
+processed_like_df
+processed_like_df.tar.gz

@@ -60,6 +60,7 @@ class DenseFuseNet(nn.Module):
         # https://github.com/Lextal/pspnet-pytorch/tree/master
         # I use the same resnet18-based PSPNet as them for speed in training
         self.psp_net = PSPNet(sizes=(1, 2, 3, 6), n_classes=32, psp_size=512, deep_features_size=256, backend='resnet18', pretrained=False)
+        # self.psp_net = nn.parallel.DataParallel(self.psp_net)
 
         self.pointnet = SimpleFusingPointNet()
 
@@ -79,7 +80,7 @@ class DenseFuseNet(nn.Module):
         self.conv3_c = nn.Conv1d(256, 128, 1)
         self.conv4_c = nn.Conv1d(128, num_objs*1, 1) # confidence
 
-    def forward(self, pts, rgb, choose, obj_idx):
+    def forward(self, pts, rgb, choose, obj_idx, ret_cemb=False):
 
         num_pts = pts.size(-1)
 
@@ -118,6 +119,9 @@ class DenseFuseNet(nn.Module):
         rout = torch.stack([rx[b][obj_idx[b]] for b in range(obj_idx.size(0))]).squeeze(1).contiguous()
         tout = torch.stack([tx[b][obj_idx[b]] for b in range(obj_idx.size(0))]).squeeze(1).contiguous()
         cout = torch.stack([cx[b][obj_idx[b]] for b in range(obj_idx.size(0))]).squeeze(1).contiguous()
+
+        if ret_cemb:
+            return rout, tout, cout, cemb.detach()
 
         # 4-dim quat, 3-dim t, 1-dim c
         return rout, tout, cout
