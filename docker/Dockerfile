@@ -87,10 +87,8 @@ RUN wget https://mujoco.org/download/mujoco210-linux-x86_64.tar.gz && tar -xvf m
 RUN apt-get update && apt-get -y install patchelf
 
 # package installs
-RUN pip3 install torch torchvision torchaudio \
+RUN pip install torch==1.12.1+cu113 torchvision==0.13.1+cu113 --extra-index-url https://download.pytorch.org/whl/cu113 \
     pip install numpy \
-    pip install open3d \
-    pip install trimesh \
     pip install wandb \
     pip install pillow \
     pip install click \
