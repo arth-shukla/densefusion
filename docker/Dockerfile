@@ -87,23 +87,11 @@ RUN wget https://mujoco.org/download/mujoco210-linux-x86_64.tar.gz && tar -xvf m
 RUN apt-get update && apt-get -y install patchelf
 
 # package installs
-RUN pip install --upgrade "jax[cuda11_pip]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html && \
-    pip install "gymnasium==0.29.1" && \
-    pip install "gymnax==0.0.6" && \
-    pip install "chex==0.1.84" && \
-    pip install "distrax==0.1.4" && \
-    pip install "flax==0.7.5" && \
-    pip install "optax==0.1.7" && \
-    pip install "moviepy==1.0.3" && \
-    pip install "tensorboard==2.15.0" && \
-    pip install "tensorboardX==2.6.2.2" && \
-    pip install "wandb==0.15.12" && \
-    pip install "omegaconf==2.3.0" && \
-    pip install "opencv-python==4.8.1.78" && \
-    pip install "transforms3d==0.4.1" && \
-    pip install "tqdm==4.66.1" && \pip install "dacite==1.8.1" && \
-    pip install "matplotlib==3.8.0" && \
-    pip install "ml_collections==0.1.1" && \
-    pip install "h5py==3.10.0" && \
-    pip install "gymnasium_robotics==1.2.3" && \
-    pip install "mani_skill2==0.5.2"
+RUN pip3 install torch torchvision torchaudio \
+    pip install numpy \
+    pip install open3d \
+    pip install trimesh \
+    pip install wandb \
+    pip install pillow \
+    pip install click \
+    pip install tqdm

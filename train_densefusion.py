@@ -127,7 +127,7 @@ def train_step(
 def train(
         model_cls, loss_fn,
         train_dl, val_dl, 
-        epochs=10, acc_req=0.95, lr=0.001, batch_size=-1,
+        epochs=1000, acc_req=0.95, lr=0.001, batch_size=-1,
         run_val_every=10,
         checkpoint_dir='checkpoints', load_checkpoint=None,
         wandb_logs=False, print_batch_metrics=False,
@@ -140,7 +140,7 @@ def train(
         run_name = f'{run_name}_{uuid.uuid4()}'
 
     # init pointnet
-    num_objects = len(os.listdir('processed_data_new/models')) - 1
+    num_objects = len(os.listdir('/arshukla-fast-vol-1/densefusion/processed_data_new/models')) - 1
     pnet = model_cls(num_objects)
     pnet.to(device)
 
@@ -226,8 +226,8 @@ def run_training(
     from learning.load import PoseDataset, pad_train
     from torch.utils.data import DataLoader
 
-    train_ds = PoseDataset(data_dir='./processed_data_new/train', cloud=True, rgb=True, model=True, choose=True)
-    val_ds = PoseDataset(data_dir='./processed_data_new/val', cloud=True, rgb=True, model=True, choose=True)
+    train_ds = PoseDataset(data_dir='/arshukla-fast-vol-1/densefusion/processed_data_new/train', cloud=True, rgb=True, model=True, choose=True)
+    val_ds = PoseDataset(data_dir='/arshukla-fast-vol-1/densefusion/processed_data_new/val', cloud=True, rgb=True, model=True, choose=True)
     train_dl = DataLoader(train_ds, batch_size=batch_size, shuffle=True, collate_fn=pad_train, num_workers=2)
     val_dl = DataLoader(val_ds, batch_size=batch_size, shuffle=True, collate_fn=pad_train, num_workers=2)
 
@@ -254,9 +254,9 @@ if __name__ == '__main__':
         lr = 0.0001,
         acc_req = 0.95,
         run_val_every = 3,
-        checkpoint_dir = 'checkpoints/densefusion',
-        load_checkpoint = 'dfnet-sym_unaware-resume_0bda885f-7b23-4981-8e4c-c9c4ea49c3af',
+        checkpoint_dir = '/arshukla-fast-vol-1/densefusion/checkpoints/densefusion',
+        # load_checkpoint = 'dfnet-sym_unaware-resume_0bda885f-7b23-4981-8e4c-c9c4ea49c3af',
         wandb_logs=True, 
         print_batch_metrics=True,
-        run_name = 'dfnet-sym_unaware-resume'
+        run_name = 'dfnet-sym_unaware-mgpu'
     )
