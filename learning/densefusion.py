@@ -60,6 +60,7 @@ class DenseFuseNet(nn.Module):
         # https://github.com/Lextal/pspnet-pytorch/tree/master
         # I use the same resnet18-based PSPNet as them for speed in training
         self.psp_net = PSPNet(sizes=(1, 2, 3, 6), n_classes=32, psp_size=512, deep_features_size=256, backend='resnet18', pretrained=False)
+        # self.psp_net = nn.parallel.DataParallel(self.psp_net)
 
         self.pointnet = SimpleFusingPointNet()
 

@@ -3,7 +3,7 @@ from typing import Optional
 import torch
 import torch.nn as nn
 import numpy as np
-from learning.loss import densefusion_symmetry_aware_loss, densefusion_symmetry_unaware_loss, rre_rte_loss, quat_to_rot
+from learning.loss import densefusion_symmetry_aware_loss, densefusion_symmetry_unaware_loss, rre_rte_loss, quat_to_rot, like_df_loss
 from learning.densefusion import DenseFuseNet
 from learning.utils import compute_rre, compute_rte
 
@@ -82,7 +82,7 @@ def train_step(
     num_data_points = 0
     tot_successes = 0
     step_loss = 0
-    for batch, (cloud, rgb, model, choose, obj_idxs, pose) in enumerate(iter(dl)):
+    for batch, (cloud, rgb, model, choose, target, obj_idxs, pose) in enumerate(iter(dl)):
         batch_size = cloud.size(0)
         num_data_points += batch_size
 
@@ -90,6 +90,7 @@ def train_step(
         rgb = rgb.to(device).float()
         model = model.to(device).float()
         choose = choose.to(device).float()
+        target = target.to(device).float()
         obj_idxs = obj_idxs.to(device)
         pose = pose.to(device).float()
 
@@ -106,7 +107,8 @@ def train_step(
 
         # calc loss
         R_gt, t_gt = pose[:,:3,:3], pose[:,:3,3]
-        loss = loss_fn(R_pred, t_pred, c_pred, R_gt, t_gt, model, reduction='mean')
+        cloud = cloud.transpose(2, 1)
+        loss = loss_fn(R_pred, t_pred, c_pred, model, target, cloud, reduction='mean')
         if train: loss.backward()
         step_loss += loss
 
@@ -134,6 +136,7 @@ def train(
         checkpoint_dir='checkpoints', load_checkpoint=None,
         wandb_logs=False, print_batch_metrics=False,
         run_name=None,
+        data_dir = 'processed_data_new'
     ):
     # get device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -144,16 +147,15 @@ def train(
         run_name = f'{run_name}_{uuid.uuid4()}'
 
     # init pointnet
-    num_objects = len(os.listdir('/arshukla-fast-vol-1/densefusion/processed_data_new/models')) - 1
+    num_objects = len(os.listdir(Path(data_dir) / 'models')) - 1
     pnet = model_cls(num_objects)
     pnet.to(device)
+    pnet = torch.nn.parallel.DataParallel(pnet, device_ids=list(range(torch.cuda.device_count())), dim=0)
 
     optimizer = torch.optim.Adam(pnet.parameters(), lr=lr)
 
     # make checkpoint dir and load checkpoints
     cdir, pnet, optimizer = handle_dirs(checkpoint_dir, pnet, optimizer, load_checkpoint=load_checkpoint, run_name=run_name)
-
-    pnet = torch.nn.parallel.DataParallel(pnet, device_ids=list(range(torch.cuda.device_count())), dim=0)
 
     if wandb_logs:
         run = wandb.init(
@@ -225,14 +227,17 @@ def run_training(
         load_checkpoint = None,
         wandb_logs=True, 
         print_batch_metrics=True,
-        run_name = 'pnet'
+        run_name = 'pnet',
+        data_dir = 'processed_data_new',
     ):
 
     from learning.load import PoseDataset, pad_train
     from torch.utils.data import DataLoader
 
-    train_ds = PoseDataset(data_dir='/arshukla-fast-vol-1/densefusion/processed_data_new/train', cloud=True, rgb=True, model=True, choose=True)
-    val_ds = PoseDataset(data_dir='/arshukla-fast-vol-1/densefusion/processed_data_new/val', cloud=True, rgb=True, model=True, choose=True)
+    data_dir = Path(data_dir)
+
+    train_ds = PoseDataset(data_dir=data_dir / 'train', cloud=True, rgb=True, model=True, choose=True, target=True)
+    val_ds = PoseDataset(data_dir=data_dir / 'val', cloud=True, rgb=True, model=True, choose=True, target=True)
     train_dl = DataLoader(train_ds, batch_size=batch_size, shuffle=True, collate_fn=pad_train, num_workers=2)
     val_dl = DataLoader(val_ds, batch_size=batch_size, shuffle=True, collate_fn=pad_train, num_workers=2)
 
@@ -249,29 +254,31 @@ def run_training(
         wandb_logs=wandb_logs, 
         print_batch_metrics=print_batch_metrics,
         run_name=run_name,
+        data_dir=data_dir,
     )
 
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('-b', '--batches', type=int, default=16)
+    parser.add_argument('-b', '--batches', type=int, default=1)
     parser.add_argument('-e', '--epochs', type=int, default=1000)
     parser.add_argument('-l', '--lr', type=float, default=0.0001)
     parser.add_argument('--acc_req', type=float, default=0.95)
     parser.add_argument('--val_every', type=int, default=3)
     parser.add_argument('-c', '--checkpoint_dir', type=str, default='checkpoints/densefusion')
     parser.add_argument('--load_checkpoint', default=None)
-    parser.add_argument('-w', '--wandb', type=bool, default=False)
+    parser.add_argument('-w', '--wandb', action='store_true')
     parser.add_argument('--print_batch_metrics', type=bool, default=True)
     parser.add_argument('--run_name', type=str, default='dfnet')
+    parser.add_argument('-d', '--data_dir', type=str, default='processed_like_df')
 
     args = parser.parse_args()
 
     print(args)
 
     run_training(
-        DenseFuseNet, densefusion_symmetry_unaware_loss,
+        DenseFuseNet, like_df_loss,
         batch_size = args.batches,
         epochs = args.epochs,
         lr = args.lr,
@@ -282,4 +289,5 @@ if __name__ == '__main__':
         wandb_logs = args.wandb, 
         print_batch_metrics = args.print_batch_metrics,
         run_name = args.run_name,
+        data_dir = args.data_dir
     )

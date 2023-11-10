@@ -148,3 +148,36 @@ def quat_to_rot(bquats: torch.Tensor, base=1e-15):
     R = R.transpose(1, 0).transpose(2, 1)
     R = R.view(bs, ps, 3, 3)
     return R
+
+
+def like_df_loss(
+        R_pred: torch.Tensor, t_pred: torch.Tensor, c_pred: torch.Tensor,
+        model: torch.Tensor, target: torch.Tensor, points: torch.Tensor,
+        w=0.015, reduction='mean',
+    ):
+    """
+       more like df loss
+    """
+
+    bs, ps = R_pred.size(0), R_pred.size(1)
+
+    Rps = R_pred.view(-1, 3, 3)
+    tps = t_pred.reshape(-1, 3)
+    cps = c_pred.reshape(-1, 1)
+
+    ms = model.unsqueeze(1).repeat(1, ps, 1, 1).view(bs*ps, -1, 3)
+    gt_transform = target.unsqueeze(1).repeat(1, ps, 1, 1).view(bs*ps, -1, 3)
+
+    points = points.view(bs * ps, -1).unsqueeze(1)
+    tps = tps.unsqueeze(1)
+    pred_transform = torch.add(torch.bmm(ms, Rps.transpose(2, 1)), points + tps)
+
+    dists = torch.mean(torch.norm(pred_transform - gt_transform, dim=2), dim=1)
+    loss = torch.mean((dists * cps - w * torch.log(cps)), dim=0)
+
+    if reduction == 'mean':
+        loss = loss.mean()
+    if reduction == 'sum':
+        loss = loss.sum()
+
+    return loss
