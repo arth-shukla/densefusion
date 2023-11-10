@@ -115,9 +115,9 @@ class DenseFuseNet(nn.Module):
         tx = tx.view(batches, self.num_objs, 3, num_pts)
         cx = torch.sigmoid(cx).view(batches, self.num_objs, 1, num_pts)
 
-        rout = torch.stack([rx[b][obj_idx[b]] for b in range(obj_idx.size(0))]).squeeze()
-        tout = torch.stack([tx[b][obj_idx[b]] for b in range(obj_idx.size(0))]).squeeze()
-        cout = torch.stack([cx[b][obj_idx[b]] for b in range(obj_idx.size(0))]).squeeze()
+        rout = torch.stack([rx[b][obj_idx[b]] for b in range(obj_idx.size(0))]).squeeze(1).contiguous()
+        tout = torch.stack([tx[b][obj_idx[b]] for b in range(obj_idx.size(0))]).squeeze(1).contiguous()
+        cout = torch.stack([cx[b][obj_idx[b]] for b in range(obj_idx.size(0))]).squeeze(1).contiguous()
 
         # 4-dim quat, 3-dim t, 1-dim c
         return rout, tout, cout

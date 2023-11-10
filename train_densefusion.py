@@ -262,7 +262,7 @@ if __name__ == '__main__':
     parser.add_argument('--val_every', type=int, default=3)
     parser.add_argument('-c', '--checkpoint_dir', type=str, default='checkpoints/densefusion')
     parser.add_argument('--load_checkpoint', default=None)
-    parser.add_argument('-w', '--wandb', type=bool, default=True)
+    parser.add_argument('-w', '--wandb', type=bool, default=False)
     parser.add_argument('--print_batch_metrics', type=bool, default=True)
     parser.add_argument('--run_name', type=str, default='dfnet')
 
