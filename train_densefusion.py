@@ -135,6 +135,8 @@ def train(
     ):
     # get device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    
+    print('USING DEVICE', device)
 
     if run_name is not None: 
         run_name = f'{run_name}_{uuid.uuid4()}'
