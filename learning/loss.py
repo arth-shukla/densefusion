@@ -152,7 +152,7 @@ def quat_to_rot(bquats: torch.Tensor, base=1e-15):
 
 def like_df_loss(
         R_pred: torch.Tensor, t_pred: torch.Tensor, c_pred: torch.Tensor,
-        model: torch.Tensor, target: torch.Tensor, points: torch.Tensor,
+        model: torch.Tensor, target: torch.Tensor,
         w=0.015, reduction='mean',
     ):
     """
@@ -163,17 +163,41 @@ def like_df_loss(
 
     Rps = R_pred.view(-1, 3, 3)
     tps = t_pred.reshape(-1, 3)
-    cps = c_pred.reshape(-1, 1)
+    cps = c_pred.reshape(-1, 1).squeeze(-1)
 
     ms = model.unsqueeze(1).repeat(1, ps, 1, 1).view(bs*ps, -1, 3)
     gt_transform = target.unsqueeze(1).repeat(1, ps, 1, 1).view(bs*ps, -1, 3)
 
-    points = points.view(bs * ps, -1).unsqueeze(1)
-    tps = tps.unsqueeze(1)
-    pred_transform = torch.add(torch.bmm(ms, Rps.transpose(2, 1)), points + tps)
+    pred_transform = torch.bmm(ms, Rps.transpose(2, 1)) + tps.unsqueeze(1)
 
     dists = torch.mean(torch.norm(pred_transform - gt_transform, dim=2), dim=1)
-    loss = torch.mean((dists * cps - w * torch.log(cps)), dim=0)
+    loss = dists * cps - w * torch.log(cps)
+    
+    if reduction == 'mean':
+        loss = loss.mean()
+    if reduction == 'sum':
+        loss = loss.sum()
+
+    return loss
+
+
+def global_pred_like_df_loss(
+        R_pred: torch.Tensor, t_pred: torch.Tensor,
+        model: torch.Tensor, target: torch.Tensor,
+        reduction='mean',
+    ):
+    """
+       more like df loss
+    """
+
+    bs, ps = R_pred.size(0), R_pred.size(1)
+
+    Rps = R_pred.view(-1, 3, 3)
+    tps = t_pred.reshape(-1, 3)
+
+    pred_transform = torch.bmm(model, Rps.transpose(2, 1)) + tps.unsqueeze(1)
+
+    loss = torch.mean(torch.norm(pred_transform - target, dim=2), dim=1)
 
     if reduction == 'mean':
         loss = loss.mean()

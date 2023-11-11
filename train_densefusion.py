@@ -107,8 +107,7 @@ def train_step(
 
         # calc loss
         R_gt, t_gt = pose[:,:3,:3], pose[:,:3,3]
-        cloud = cloud.transpose(2, 1)
-        loss = loss_fn(R_pred, t_pred, c_pred, model, target, cloud, reduction='mean')
+        loss = loss_fn(R_pred, t_pred, c_pred, model, target, reduction='mean')
         if train: loss.backward()
         step_loss += loss
 
@@ -261,7 +260,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('-b', '--batches', type=int, default=1)
+    parser.add_argument('-b', '--batches', type=int, default=16)
     parser.add_argument('-e', '--epochs', type=int, default=1000)
     parser.add_argument('-l', '--lr', type=float, default=0.0001)
     parser.add_argument('--acc_req', type=float, default=0.95)
