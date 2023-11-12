@@ -72,7 +72,6 @@ def load_model(model, optimizer, load_path, device=torch.device('cpu')):
 
 def train_step(
         dfnet, dl, optimizer, loss_fn,
-        pose_evaluator: PoseEvaluator,
         batch_size=16,
         train=True,
         device=torch.device('cpu'), epoch=0,
@@ -83,7 +82,7 @@ def train_step(
     num_data_points, tot_successes, tot_rre_sym, tot_rre, tot_rte = 0, 0, 0, 0, 0
     step_loss = 0
     for iter_num, (cloud, rgb, model, choose, target, obj_idxs, pose) in enumerate(iter(dl)):
-        num_data_points += 1
+        num_data_points += batch_size
 
         cloud = cloud.to(device).float()
         rgb = rgb.to(device).float()
@@ -133,7 +132,6 @@ def train_step(
 def train(
         model_cls, loss_fn,
         train_dl, val_dl, 
-        pose_evaluator,
         epochs=1000, acc_req=0.95, lr=0.001, batch_size=-1,
         run_val_every=10,
         checkpoint_dir='checkpoints', load_checkpoint=None,
@@ -181,7 +179,6 @@ def train(
 
         train_accuracy, train_loss, train_rre_sym, train_rre, train_rte = train_step(
             pnet.train(), train_dl, optimizer, loss_fn,
-            pose_evaluator,
             batch_size=batch_size,
             train=True,
             device=device, epoch=epoch,
@@ -196,7 +193,6 @@ def train(
             with torch.no_grad():
                 val_accuracy, val_loss, val_rre_sym, val_rre, val_rte = train_step(
                     pnet.eval(), val_dl, optimizer, loss_fn,
-                    pose_evaluator,
                     batch_size=batch_size,
                     train=False,
                     device=device, epoch=epoch,
@@ -232,7 +228,6 @@ def train(
 
 def run_training(
         model_cls, loss_fn,
-        pose_evaluator,
         batch_size = 8,
         epochs = 1000,
         lr = 0.0001,
@@ -259,7 +254,6 @@ def run_training(
     trained_dfnet = train(
         model_cls, loss_fn,
         train_dl, val_dl, 
-        pose_evaluator,
         epochs=epochs,
         acc_req=acc_req,
         lr=lr, 
@@ -283,6 +277,7 @@ if __name__ == '__main__':
         if obj_data['geometric_symmetry'] != 'no':
             sym_list.append(OBJ_NAMES_TO_IDX[obj_name])
         
+    print(sym_list)
 
     parser = argparse.ArgumentParser()
 
@@ -304,7 +299,6 @@ if __name__ == '__main__':
 
     run_training(
         DenseFuseNet, torch.nn.DataParallel(DenseFusionLoss(sym_list=sym_list, w = 0.015, reduction = 'mean')),
-        pose_evaluator,
         batch_size = args.batches,
         epochs = args.epochs,
         lr = args.lr,
