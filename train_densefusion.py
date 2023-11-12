@@ -3,9 +3,10 @@ from typing import Optional
 import torch
 import torch.nn as nn
 import numpy as np
-from learning.loss import densefusion_symmetry_aware_loss, densefusion_symmetry_unaware_loss, rre_rte_loss, quat_to_rot, like_df_loss
+from learning.loss import quat_to_rot, DenseFusionLoss
 from learning.densefusion import DenseFuseNet
-from learning.utils import compute_rre, compute_rte
+from learning.utils import compute_rre, compute_rte, OBJ_NAMES, OBJ_NAMES_TO_IDX, IDX_TO_OBJ_NAMES
+from benchmark_utils.pose_evaluator import PoseEvaluator
 
 import wandb
 import uuid
@@ -13,6 +14,29 @@ import uuid
 from pathlib import Path
 import os
 import time
+
+def get_success_metrics(R_pred, t_pred, c_pred, R_gt, t_gt, obj_idxs):
+    free = lambda x: x.detach().cpu().numpy()
+    R_pred, t_pred, c_pred = free(R_pred), free(t_pred), free(c_pred)
+    R_gt, t_gt = free(R_gt), free(t_gt)
+
+    s, rresy, rre, rte = [], [], [], []
+    for b in range(R_pred.shape[0]):
+        evaluation = pose_evaluator.evaluate(
+            IDX_TO_OBJ_NAMES[obj_idxs[b].item()],
+            R_pred[b][np.argmin(c_pred[b].squeeze())],
+            R_gt[b],
+            t_pred[b][np.argmin(c_pred[b].squeeze())],
+            t_gt[b],
+        )
+        s.append(evaluation['rre_symmetry'] <= 5 and evaluation['rte'] <= 0.01)
+        rresy.append(evaluation['rre_symmetry'])
+        rre.append(evaluation['rre'])
+        rte.append(evaluation['rte'])
+    print(rresy)
+    print(rre)
+    print(rte)
+    return np.sum(s), np.mean(rresy), np.mean(rre), np.mean(rte)
 
 def handle_dirs(checkpoint_dir, pnet, optimizer, load_checkpoint=None, run_name=None):
     c_overall_dir = Path(checkpoint_dir)
@@ -34,31 +58,6 @@ def handle_dirs(checkpoint_dir, pnet, optimizer, load_checkpoint=None, run_name=
 
     return cdir, pnet, optimizer
 
-def get_num_successes(R_pred, t_pred, c_pred, R_gt, t_gt):
-    def check_success(R_pred, t_pred, R_gt, t_gt):
-        rre = np.rad2deg(compute_rre(R_pred, R_gt))
-        rte = compute_rte(t_pred, t_gt)
-        return int(rre < 5 and rte < 1), rre, rte
-    
-    batch_size = R_pred.size(0)
-    R_p_cpu, t_p_cpu = R_pred.detach().cpu().numpy(), t_pred.detach().cpu().numpy()
-    R_gt_cpu, t_gt_cpu = R_gt.detach().cpu().numpy(), t_gt.detach().cpu().numpy(),
-    c_p = c_pred.detach().cpu().numpy()
-    successes = 0
-    rres, rtes = [], []
-    for b in range(batch_size):
-        best_ind = np.argmax(c_p[b])
-        s, rre, rte = check_success(
-            R_p_cpu[b][best_ind], t_p_cpu[b][best_ind],
-            R_gt_cpu[b], t_gt_cpu[b],
-        )
-        successes += s
-        rres.append(rre)
-        rtes.append(rte)
-    print([f'{x:.2f}' for x in rres])
-    print([f'{x:.2f}' for x in rtes])
-    return successes, np.mean(rres), np.mean(rtes)
-
 def save_model(model, optimizer, save_path):
     torch.save(dict(
         model=model.state_dict(),
@@ -73,18 +72,18 @@ def load_model(model, optimizer, load_path, device=torch.device('cpu')):
 
 def train_step(
         dfnet, dl, optimizer, loss_fn,
+        pose_evaluator: PoseEvaluator,
+        batch_size=16,
         train=True,
         device=torch.device('cpu'), epoch=0,
         print_batch_metrics=False
     ):
 
     print_pref = 'train' if train else 'val'
-    num_data_points = 0
-    tot_successes = 0
+    num_data_points, tot_successes, tot_rre_sym, tot_rre, tot_rte = 0, 0, 0, 0, 0
     step_loss = 0
-    for batch, (cloud, rgb, model, choose, target, obj_idxs, pose) in enumerate(iter(dl)):
-        batch_size = cloud.size(0)
-        num_data_points += batch_size
+    for iter_num, (cloud, rgb, model, choose, target, obj_idxs, pose) in enumerate(iter(dl)):
+        num_data_points += 1
 
         cloud = cloud.to(device).float()
         rgb = rgb.to(device).float()
@@ -106,30 +105,35 @@ def train_step(
         t_pred = t_pred.transpose(2, 1)
 
         # calc loss
-        R_gt, t_gt = pose[:,:3,:3], pose[:,:3,3]
-        loss = loss_fn(R_pred, t_pred, c_pred, model, target, reduction='mean')
+        loss = loss_fn(R_pred, t_pred, c_pred, model, target, obj_idxs[0].item())
         if train: loss.backward()
         step_loss += loss
 
         # descent step
-        optimizer.step()
+        if train: optimizer.step()
 
-        successes, batch_rre, batch_rte = get_num_successes(R_pred, t_pred, c_pred, R_gt, t_gt)
-        accuracy = successes / batch_size
+        successes, rre_sym, rre, rte = get_success_metrics(R_pred, t_pred, c_pred, pose[:, :3, :3], pose[:, :3, 3], obj_idxs)
         tot_successes += successes
-
+        tot_rre_sym += rre_sym
+        tot_rre += rre
+        tot_rte += rte
+            
         if print_batch_metrics:
-            print(f'\t\tepoch: {epoch}\tbatch: {batch+1}/{len(dl)}\t{print_pref}_acc: {accuracy:.4f}\t{print_pref}_loss: {loss.item() / batch_size:.4f}\t{print_pref}_running_acc: {tot_successes / num_data_points:.4f}\t{print_pref}_rre={batch_rre:.4f}\t{print_pref}_rte={batch_rte:.4f}')
+            print(f'\t\tepoch: {epoch}\titer: {iter_num+1}/{len(dl)}\t{print_pref}_acc: {successes/batch_size:.4f}\t{print_pref}_loss: {loss.item():.4f}\t{print_pref}_running_acc: {tot_successes / num_data_points:.4f}\t{print_pref}_rre_sym={rre_sym:.4f}\t{print_pref}_rre={rre:.4f}\t{print_pref}_rte={rte:.4f}')
 
     step_accuracy = tot_successes / num_data_points
+    tot_rre_sym /= len(dl)
+    tot_rre /= len(dl)
+    tot_rte /= len(dl)
     step_loss = step_loss / len(dl)
-    print(f'epoch: {epoch}\t{print_pref}_acc: {step_accuracy}\t{print_pref}_loss: {step_loss}')
+    print(f'epoch: {epoch}\t{print_pref}_acc: {step_accuracy}\t{print_pref}_loss: {step_loss}\t{print_pref}_rre_sym: {tot_rre_sym}\t{print_pref}_rre: {tot_rre}\t{print_pref}_rte: {tot_rte}')
     
-    return step_accuracy, step_loss
+    return step_accuracy, step_loss, tot_rre_sym, tot_rre, tot_rte
 
 def train(
         model_cls, loss_fn,
         train_dl, val_dl, 
+        pose_evaluator,
         epochs=1000, acc_req=0.95, lr=0.001, batch_size=-1,
         run_val_every=10,
         checkpoint_dir='checkpoints', load_checkpoint=None,
@@ -146,7 +150,7 @@ def train(
         run_name = f'{run_name}_{uuid.uuid4()}'
 
     # init pointnet
-    num_objects = len(os.listdir(Path(data_dir) / 'models')) - 1
+    num_objects = len(OBJ_NAMES)
     pnet = model_cls(num_objects)
     pnet.to(device)
     pnet = torch.nn.parallel.DataParallel(pnet, device_ids=list(range(torch.cuda.device_count())), dim=0)
@@ -175,20 +179,25 @@ def train(
 
         print(f'Starting epoch {epoch}...')
 
-        train_accuracy, train_loss = train_step(
+        train_accuracy, train_loss, train_rre_sym, train_rre, train_rte = train_step(
             pnet.train(), train_dl, optimizer, loss_fn,
+            pose_evaluator,
+            batch_size=batch_size,
             train=True,
             device=device, epoch=epoch,
             print_batch_metrics=print_batch_metrics
         )
 
-        wandb_log = dict()
+        if wandb_logs:
+            wandb_log = dict()
 
         # validation + wandb val visualizing
         if epoch % run_val_every == 0 and run_val_every > 0:
             with torch.no_grad():
-                val_accuracy, val_loss = train_step(
+                val_accuracy, val_loss, val_rre_sym, val_rre, val_rte = train_step(
                     pnet.eval(), val_dl, optimizer, loss_fn,
+                    pose_evaluator,
+                    batch_size=batch_size,
                     train=False,
                     device=device, epoch=epoch,
                     print_batch_metrics=print_batch_metrics
@@ -198,12 +207,18 @@ def train(
                 # log val metrics to wandb
                 wandb_log['val/val_acc'] = val_accuracy
                 wandb_log['val/val_loss'] = val_loss
+                wandb_log['val/val_rre_sym'] = val_rre_sym
+                wandb_log['val/val_rre'] = val_rre
+                wandb_log['val/val_rte'] = val_rte
 
 
         # logging to wandb
         if wandb_logs:
             wandb_log['train/train_acc'] = train_accuracy
             wandb_log['train/train_loss'] = train_loss
+            wandb_log['train/train_rre_sym'] = train_rre_sym
+            wandb_log['train/train_rre'] = train_rre
+            wandb_log['train/train_rte'] = train_rte
             run.log(wandb_log)
 
         # break if req accuracy reached
@@ -217,6 +232,7 @@ def train(
 
 def run_training(
         model_cls, loss_fn,
+        pose_evaluator,
         batch_size = 8,
         epochs = 1000,
         lr = 0.0001,
@@ -243,6 +259,7 @@ def run_training(
     trained_dfnet = train(
         model_cls, loss_fn,
         train_dl, val_dl, 
+        pose_evaluator,
         epochs=epochs,
         acc_req=acc_req,
         lr=lr, 
@@ -258,6 +275,15 @@ def run_training(
 
 if __name__ == '__main__':
 
+    pose_evaluator = PoseEvaluator()
+
+    sym_list = []
+    for obj_name in OBJ_NAMES:
+        obj_data = pose_evaluator.objects_db[obj_name]
+        if obj_data['geometric_symmetry'] != 'no':
+            sym_list.append(OBJ_NAMES_TO_IDX[obj_name])
+        
+
     parser = argparse.ArgumentParser()
 
     parser.add_argument('-b', '--batches', type=int, default=16)
@@ -267,7 +293,7 @@ if __name__ == '__main__':
     parser.add_argument('--val_every', type=int, default=3)
     parser.add_argument('-c', '--checkpoint_dir', type=str, default='checkpoints/densefusion')
     parser.add_argument('--load_checkpoint', default=None)
-    parser.add_argument('-w', '--wandb', action='store_true')
+    parser.add_argument('--wandb', action='store_true')
     parser.add_argument('--print_batch_metrics', type=bool, default=True)
     parser.add_argument('--run_name', type=str, default='dfnet')
     parser.add_argument('-d', '--data_dir', type=str, default='processed_like_df')
@@ -277,7 +303,8 @@ if __name__ == '__main__':
     print(args)
 
     run_training(
-        DenseFuseNet, like_df_loss,
+        DenseFuseNet, torch.nn.DataParallel(DenseFusionLoss(sym_list=sym_list, w = 0.015, reduction = 'mean')),
+        pose_evaluator,
         batch_size = args.batches,
         epochs = args.epochs,
         lr = args.lr,

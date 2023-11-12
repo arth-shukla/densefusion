@@ -1,38 +1,12 @@
 import torch
-
-def densefusion_symmetry_aware_loss(
-        R_pred: torch.Tensor, t_pred: torch.Tensor, c_pred: torch.Tensor,
-        R_gt: torch.Tensor, t_gt: torch.Tensor, model: torch.Tensor, 
-        w=0.015, reduction='mean'
-    ):
-    return densefusion_loss(
-        R_pred, t_pred, c_pred,
-        R_gt, t_gt, model, 
-        symmetry_aware=True,
-        w=w, reduction=reduction
-    )
-
-def densefusion_symmetry_unaware_loss(
-        R_pred: torch.Tensor, t_pred: torch.Tensor, c_pred: torch.Tensor,
-        R_gt: torch.Tensor, t_gt: torch.Tensor, model: torch.Tensor, 
-        w=0.015, reduction='mean'
-    ):
-    return densefusion_loss(
-        R_pred, t_pred, c_pred,
-        R_gt, t_gt, model, 
-        symmetry_aware=False,
-        w=w, reduction=reduction
-    )
+from torch.nn.modules.loss import _Loss
 
 def densefusion_loss(
         R_pred: torch.Tensor, t_pred: torch.Tensor, c_pred: torch.Tensor,
-        R_gt: torch.Tensor, t_gt: torch.Tensor, model: torch.Tensor, 
-        symmetry_aware=True,
-        w=0.015, reduction='mean'
+        model: torch.Tensor, target: torch.Tensor, obj_idx,
+        sym_list=[], 
+        w=0.015, reduction='mean',
     ):
-    """
-        Densefusion shape-aware loss
-    """
     def pairwise_dist(xyz1, xyz2):
         r_xyz1 = torch.sum(xyz1 * xyz1, dim=2, keepdim=True)
         r_xyz2 = torch.sum(xyz2 * xyz2, dim=2, keepdim=True)
@@ -40,25 +14,18 @@ def densefusion_loss(
         dist = r_xyz2 - 2 * mul + r_xyz1.permute(0,2,1)
         return dist
 
-    def chunks(lst, n):
-        for i in range(0, len(lst), n):
-            yield lst[i:i + n]
-
     bs, ps = R_pred.size(0), R_pred.size(1)
 
     Rps = R_pred.view(-1, 3, 3)
     tps = t_pred.reshape(-1, 3)
-    cps = c_pred.reshape(-1, 1)
+    cps = c_pred.reshape(-1, 1).squeeze(-1)
 
-    Rgts = R_gt.unsqueeze(1).repeat(1, ps, 1, 1).view(bs*ps, 3, 3)
-    tgts = t_gt.unsqueeze(1).repeat(1, ps, 1, 1).view(bs*ps, 3)
     ms = model.unsqueeze(1).repeat(1, ps, 1, 1).view(bs*ps, -1, 3)
+    gt_transform = target.unsqueeze(1).repeat(1, ps, 1, 1).view(bs*ps, -1, 3)
 
     pred_transform = torch.bmm(ms, Rps.transpose(2, 1)) + tps.unsqueeze(1)
-    gt_transform = torch.bmm(ms, Rgts.transpose(2, 1)) + tgts.unsqueeze(1)
 
-    if symmetry_aware:
-        # do it in chunks to avoid out-of-memory errors
+    if True:
         closest_to_x_inds = []
         for b_range in chunks(range(bs*ps), bs):
             pwise_dist = pairwise_dist(pred_transform[b_range], gt_transform[b_range])
@@ -69,8 +36,8 @@ def densefusion_loss(
         dists = torch.mean(torch.norm(pred_transform - closest_gt_pts, dim=2), dim=1)
     else:
         dists = torch.mean(torch.norm(pred_transform - gt_transform, dim=2), dim=1)
-    loss = torch.mean((dists * cps - w * torch.log(cps)), dim=0)
-
+    loss = dists * cps - w * torch.log(cps)
+    
     if reduction == 'mean':
         loss = loss.mean()
     if reduction == 'sum':
@@ -78,43 +45,26 @@ def densefusion_loss(
 
     return loss
 
-def rre_rte_loss(
-        R_pred: torch.Tensor, t_pred: torch.Tensor, c_pred: torch.Tensor,
-        R_gt: torch.Tensor, t_gt: torch.Tensor, model: torch.Tensor, 
-        w=0.015, reduction='mean'
-    ):
-    """
-        Simple rre and rte loss
-    """
+class DenseFusionLoss(_Loss):
 
-    bs, ps = R_pred.size(0), R_pred.size(1)
+    def __init__(self, sym_list=[], w=0.015, reduction='mean'):
+        super().__init__()
+        self.sym_list = sym_list
+        self.w = w
+        self.reduction = reduction
 
-    Rps = R_pred.view(-1, 3, 3)
-    tps = t_pred.reshape(-1, 3)
-    cps = c_pred.reshape(-1, 1)
+    def forward(
+            self,
+            R_pred: torch.Tensor, t_pred: torch.Tensor, c_pred: torch.Tensor,
+            model: torch.Tensor, target: torch.Tensor, obj_idx,
+        ):
 
-    Rgts = R_gt.unsqueeze(1).repeat(1, ps, 1, 1).view(bs*ps, 3, 3)
-    tgts = t_gt.unsqueeze(1).repeat(1, ps, 1, 1).view(bs*ps, 3)
-
-    rres = rre(Rps, Rgts)
-    rtes = rte(tps, tgts)
-    print(rres)
-    print(rtes)
-    print(rres + rtes)
-    loss = (rres + rtes) * cps - w * torch.log(cps)
-
-    if reduction == 'mean':
-        loss = loss.mean()
-    if reduction == 'sum':
-        loss = loss.sum()
-
-    return loss
-
-def rre(R_pred, R_gt):
-    return torch.arccos(torch.clip(0.5 * (torch.vmap(torch.trace)(torch.bmm(R_pred.transpose(2, 1), R_gt)) - 1), -1.0, 1.0))
-
-def rte(t_pred, t_gt):
-    return torch.norm(t_pred - t_gt, dim=1)
+        return densefusion_loss(
+            R_pred, t_pred, c_pred,
+            model, target, obj_idx,
+            sym_list=self.sym_list,
+            w=self.w, reduction=self.reduction
+        )
 
 
 def quat_to_rot(bquats: torch.Tensor, base=1e-15):
@@ -148,37 +98,6 @@ def quat_to_rot(bquats: torch.Tensor, base=1e-15):
     R = R.transpose(1, 0).transpose(2, 1)
     R = R.view(bs, ps, 3, 3)
     return R
-
-
-def like_df_loss(
-        R_pred: torch.Tensor, t_pred: torch.Tensor, c_pred: torch.Tensor,
-        model: torch.Tensor, target: torch.Tensor,
-        w=0.015, reduction='mean',
-    ):
-    """
-       more like df loss
-    """
-
-    bs, ps = R_pred.size(0), R_pred.size(1)
-
-    Rps = R_pred.view(-1, 3, 3)
-    tps = t_pred.reshape(-1, 3)
-    cps = c_pred.reshape(-1, 1).squeeze(-1)
-
-    ms = model.unsqueeze(1).repeat(1, ps, 1, 1).view(bs*ps, -1, 3)
-    gt_transform = target.unsqueeze(1).repeat(1, ps, 1, 1).view(bs*ps, -1, 3)
-
-    pred_transform = torch.bmm(ms, Rps.transpose(2, 1)) + tps.unsqueeze(1)
-
-    dists = torch.mean(torch.norm(pred_transform - gt_transform, dim=2), dim=1)
-    loss = dists * cps - w * torch.log(cps)
-    
-    if reduction == 'mean':
-        loss = loss.mean()
-    if reduction == 'sum':
-        loss = loss.sum()
-
-    return loss
 
 
 def global_pred_like_df_loss(
@@ -236,3 +155,31 @@ def global_pred_quat_to_rot(bquats: torch.Tensor, base=1e-15):
     R = R.transpose(1, 0)
     R = R.view(bs, 3, 3)
     return R
+
+def densefusion_symmetry_aware_loss(
+        R_pred: torch.Tensor, t_pred: torch.Tensor, c_pred: torch.Tensor,
+        model: torch.Tensor, target: torch.Tensor,
+        w=0.015, reduction='mean'
+    ):
+    return densefusion_loss(
+        R_pred, t_pred, c_pred,
+        model, target,
+        symmetry_aware=True,
+        w=w, reduction=reduction
+    )
+
+def densefusion_symmetry_unaware_loss(
+        R_pred: torch.Tensor, t_pred: torch.Tensor, c_pred: torch.Tensor,
+        model: torch.Tensor, target: torch.Tensor,
+        w=0.015, reduction='mean'
+    ):
+    return densefusion_loss(
+        R_pred, t_pred, c_pred,
+        model, target,
+        symmetry_aware=False,
+        w=w, reduction=reduction
+    )
+
+def chunks(lst, n):
+    for i in range(0, len(lst), n):
+        yield lst[i:i + n]
