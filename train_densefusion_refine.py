@@ -3,10 +3,10 @@ from typing import Optional
 import torch
 import torch.nn as nn
 import numpy as np
-from learning.loss import quat_to_rot, DenseFusionLoss
+from learning.loss import densefusion_symmetry_aware_loss, densefusion_symmetry_unaware_loss, rre_rte_loss, quat_to_rot, like_df_loss, global_pred_like_df_loss, global_pred_quat_to_rot
 from learning.densefusion import DenseFuseNet
-from learning.utils import compute_rre, compute_rte, OBJ_NAMES, OBJ_NAMES_TO_IDX, IDX_TO_OBJ_NAMES
-from benchmark_utils.pose_evaluator import PoseEvaluator
+from learning.densefusion_refine import DenseRefinerFuseNet
+from learning.utils import compute_rre, compute_rte
 
 import wandb
 import uuid
@@ -15,36 +15,16 @@ from pathlib import Path
 import os
 import time
 
-def get_success_metrics(R_pred, t_pred, c_pred, R_gt, t_gt, obj_idxs):
-    free = lambda x: x.detach().cpu().numpy()
-    R_pred, t_pred, c_pred = free(R_pred), free(t_pred), free(c_pred)
-    R_gt, t_gt = free(R_gt), free(t_gt)
-
-    s, rresy, rre, rte = [], [], [], []
-    for b in range(R_pred.shape[0]):
-        evaluation = pose_evaluator.evaluate(
-            IDX_TO_OBJ_NAMES[obj_idxs[b].item()],
-            R_pred[b][np.argmin(c_pred[b].squeeze())],
-            R_gt[b],
-            t_pred[b][np.argmin(c_pred[b].squeeze())],
-            t_gt[b],
-        )
-        s.append(evaluation['rre_symmetry'] <= 5 and evaluation['rte'] <= 0.01)
-        rresy.append(evaluation['rre_symmetry'])
-        rre.append(evaluation['rre'])
-        rte.append(evaluation['rte'])
-    print(rresy)
-    print(rre)
-    print(rte)
-    return np.sum(s), np.mean(rresy), np.mean(rre), np.mean(rte)
-
-def handle_dirs(checkpoint_dir, pnet, optimizer, load_checkpoint=None, run_name=None):
+def handle_dirs(checkpoint_dir, refiner, optimizer, model, model_load_checkpoint, load_checkpoint=None, run_name=None):
     c_overall_dir = Path(checkpoint_dir)
     os.makedirs(c_overall_dir, exist_ok=True)
 
+    print('Loading base model and optimizer...')
+    model, _ = load_model(model, torch.optim.Adam(model.parameters()), load_path=Path(model_load_checkpoint))
+
     if load_checkpoint is not None:
-        print('Loading pnet and optimizer...')
-        pnet, optimizer = load_model(pnet, optimizer, load_path=c_overall_dir / f'{load_checkpoint}' / 'latest.pt')
+        print('Loading refiner model and optimizer...')
+        refiner, optimizer = load_model(refiner, optimizer, load_path=c_overall_dir / f'{load_checkpoint}' / 'latest.pt')
 
     cnum = 0
     for dirname in os.listdir(c_overall_dir):
@@ -53,10 +33,33 @@ def handle_dirs(checkpoint_dir, pnet, optimizer, load_checkpoint=None, run_name=
         if (past_cnum >= cnum):
             cnum = past_cnum + 1 
 
-    cdir = c_overall_dir / (f'{cnum}' if run_name is None else run_name)
+    cdir = c_overall_dir / (f'{cnum}_refiner' if run_name is None else run_name)
     os.makedirs(cdir, exist_ok=True)
 
-    return cdir, pnet, optimizer
+    return cdir, refiner, optimizer, model
+
+def get_num_successes(R_pred, t_pred, R_gt, t_gt):
+    def check_success(R_pred, t_pred, R_gt, t_gt):
+        rre = np.rad2deg(compute_rre(R_pred, R_gt))
+        rte = compute_rte(t_pred, t_gt)
+        return int(rre < 5 and rte < 1), rre, rte
+    
+    batch_size = R_pred.size(0)
+    R_p_cpu, t_p_cpu = R_pred.detach().cpu().numpy(), t_pred.detach().cpu().numpy()
+    R_gt_cpu, t_gt_cpu = R_gt.detach().cpu().numpy(), t_gt.detach().cpu().numpy(),
+    successes = 0
+    rres, rtes = [], []
+    for b in range(batch_size):
+        s, rre, rte = check_success(
+            R_p_cpu[b], t_p_cpu[b],
+            R_gt_cpu[b], t_gt_cpu[b],
+        )
+        successes += s
+        rres.append(rre)
+        rtes.append(rte)
+    print([f'{x:.2f}' for x in rres])
+    print([f'{x:.2f}' for x in rtes])
+    return successes, np.mean(rres), np.mean(rtes)
 
 def save_model(model, optimizer, save_path):
     torch.save(dict(
@@ -71,19 +74,20 @@ def load_model(model, optimizer, load_path, device=torch.device('cpu')):
     return model, optimizer
 
 def train_step(
-        dfnet, dl, optimizer, loss_fn,
-        pose_evaluator: PoseEvaluator,
-        batch_size=16,
+        refiner, dfnet, dl, optimizer, loss_fn,
         train=True,
+        refine_iters=2,
         device=torch.device('cpu'), epoch=0,
         print_batch_metrics=False
     ):
 
     print_pref = 'train' if train else 'val'
-    num_data_points, tot_successes, tot_rre_sym, tot_rre, tot_rte = 0, 0, 0, 0, 0
+    num_data_points = 0
+    tot_successes = 0
     step_loss = 0
-    for iter_num, (cloud, rgb, model, choose, target, obj_idxs, pose) in enumerate(iter(dl)):
-        num_data_points += 1
+    for batch, (cloud, rgb, model, choose, target, obj_idxs, pose) in enumerate(iter(dl)):
+        batch_size = cloud.size(0)
+        num_data_points += batch_size
 
         cloud = cloud.to(device).float()
         rgb = rgb.to(device).float()
@@ -99,41 +103,52 @@ def train_step(
         cloud = cloud.transpose(2, 1)
         rgb = rgb.transpose(3, 2).transpose(2, 1)
         choose = choose.view(choose.size(0), -1)
-        R_quat_pred, t_pred, c_pred = dfnet(cloud, rgb, choose, obj_idxs)
+        R_quat_pred, t_pred, c_pred, cemb = dfnet(cloud, rgb, choose, obj_idxs, ret_cemb=True)
 
+        cloud = cloud.transpose(2, 1)
         R_pred = quat_to_rot(R_quat_pred)
         t_pred = t_pred.transpose(2, 1)
+        c_pred = c_pred.unsqueeze(1)
+        best_Rs = torch.stack([R_pred[b][torch.argmax(c_pred[b])] for b in range(batch_size)]).detach()
+        best_ts = torch.stack([t_pred[b][torch.argmax(c_pred[b])] for b in range(batch_size)]).detach()
+        new_cloud = (torch.bmm(cloud, best_Rs.transpose(2, 1)) + best_ts.unsqueeze(1)).detach()
 
-        # calc loss
-        loss = loss_fn(R_pred, t_pred, c_pred, model, target, obj_idxs[0].item())
-        if train: loss.backward()
-        step_loss += loss
+        running_R, running_T = best_Rs.detach(), best_ts.detach()
+        for _ in range(refine_iters):
+            R_quat_pred, t_pred = refiner(new_cloud.transpose(2, 1), cemb, obj_idxs)
+            R_pred = global_pred_quat_to_rot(R_quat_pred)
+
+            loss = loss_fn(R_pred, t_pred, model, target, reduction='mean')
+            if train: loss.backward()
+
+            new_cloud = (torch.bmm(new_cloud, R_pred.transpose(2, 1)) + t_pred.unsqueeze(1)).detach()
+
+            running_R = torch.bmm(running_R, R_pred.detach().transpose(2, 1))
+            running_T = running_T + t_pred.detach()
+
+            step_loss += loss
 
         # descent step
-        if train: optimizer.step()
+        optimizer.step()
 
-        successes, rre_sym, rre, rte = get_success_metrics(R_pred, t_pred, c_pred, pose[:, :3, :3], pose[:, :3, 3], obj_idxs)
+        R_gt, t_gt = pose[:,:3,:3], pose[:,:3,3]
+        successes, batch_rre, batch_rte = get_num_successes(running_R, running_T, R_gt, t_gt)
+        accuracy = successes / batch_size
         tot_successes += successes
-        tot_rre_sym += rre_sym
-        tot_rre += rre
-        tot_rte += rte
-            
+
         if print_batch_metrics:
-            print(f'\t\tepoch: {epoch}\titer: {iter_num+1}/{len(dl)}\t{print_pref}_acc: {successes/batch_size:.4f}\t{print_pref}_loss: {loss.item():.4f}\t{print_pref}_running_acc: {tot_successes / num_data_points:.4f}\t{print_pref}_rre_sym={rre_sym:.4f}\t{print_pref}_rre={rre:.4f}\t{print_pref}_rte={rte:.4f}')
+            print(f'\t\tepoch: {epoch}\tbatch: {batch+1}/{len(dl)}\t{print_pref}_acc: {accuracy:.4f}\t{print_pref}_loss: {loss.item() / batch_size:.4f}\t{print_pref}_running_acc: {tot_successes / num_data_points:.4f}\t{print_pref}_rre={batch_rre:.4f}\t{print_pref}_rte={batch_rte:.4f}')
 
     step_accuracy = tot_successes / num_data_points
-    tot_rre_sym /= len(dl)
-    tot_rre /= len(dl)
-    tot_rte /= len(dl)
     step_loss = step_loss / len(dl)
-    print(f'epoch: {epoch}\t{print_pref}_acc: {step_accuracy}\t{print_pref}_loss: {step_loss}\t{print_pref}_rre_sym: {tot_rre_sym}\t{print_pref}_rre: {tot_rre}\t{print_pref}_rte: {tot_rte}')
+    print(f'epoch: {epoch}\t{print_pref}_acc: {step_accuracy}\t{print_pref}_loss: {step_loss}')
     
-    return step_accuracy, step_loss, tot_rre_sym, tot_rre, tot_rte
+    return step_accuracy, step_loss
 
 def train(
-        model_cls, loss_fn,
-        train_dl, val_dl, 
-        pose_evaluator,
+        refiner_model_cls, model_cls, loss_fn,
+        train_dl, val_dl,
+        model_load_checkpoint,
         epochs=1000, acc_req=0.95, lr=0.001, batch_size=-1,
         run_val_every=10,
         checkpoint_dir='checkpoints', load_checkpoint=None,
@@ -147,18 +162,22 @@ def train(
     print('USING DEVICE', device)
 
     if run_name is not None: 
-        run_name = f'{run_name}_{uuid.uuid4()}'
+        run_name = f'{run_name}_refiner_{uuid.uuid4()}'
 
     # init pointnet
-    num_objects = len(OBJ_NAMES)
-    pnet = model_cls(num_objects)
-    pnet.to(device)
-    pnet = torch.nn.parallel.DataParallel(pnet, device_ids=list(range(torch.cuda.device_count())), dim=0)
+    num_objects = len(os.listdir(Path(data_dir) / 'models')) - 1
+    model = model_cls(num_objects)
+    model.to(device)
+    model = torch.nn.parallel.DataParallel(model, device_ids=list(range(torch.cuda.device_count())), dim=0)
 
-    optimizer = torch.optim.Adam(pnet.parameters(), lr=lr)
+    refiner = refiner_model_cls(num_objects)
+    refiner.to(device)
+    refiner = torch.nn.parallel.DataParallel(refiner, device_ids=list(range(torch.cuda.device_count())), dim=0)
+
+    optimizer = torch.optim.Adam(refiner.parameters(), lr=lr)
 
     # make checkpoint dir and load checkpoints
-    cdir, pnet, optimizer = handle_dirs(checkpoint_dir, pnet, optimizer, load_checkpoint=load_checkpoint, run_name=run_name)
+    cdir, refiner, optimizer, model = handle_dirs(checkpoint_dir + '_refiner', refiner, optimizer, model, model_load_checkpoint, load_checkpoint=load_checkpoint, run_name=run_name)
 
     if wandb_logs:
         run = wandb.init(
@@ -179,25 +198,20 @@ def train(
 
         print(f'Starting epoch {epoch}...')
 
-        train_accuracy, train_loss, train_rre_sym, train_rre, train_rte = train_step(
-            pnet.train(), train_dl, optimizer, loss_fn,
-            pose_evaluator,
-            batch_size=batch_size,
+        train_accuracy, train_loss = train_step(
+            refiner.train(), model.eval(), train_dl, optimizer, loss_fn,
             train=True,
             device=device, epoch=epoch,
             print_batch_metrics=print_batch_metrics
         )
 
-        if wandb_logs:
-            wandb_log = dict()
+        wandb_log = dict()
 
         # validation + wandb val visualizing
         if epoch % run_val_every == 0 and run_val_every > 0:
             with torch.no_grad():
-                val_accuracy, val_loss, val_rre_sym, val_rre, val_rte = train_step(
-                    pnet.eval(), val_dl, optimizer, loss_fn,
-                    pose_evaluator,
-                    batch_size=batch_size,
+                val_accuracy, val_loss = train_step(
+                    refiner.eval(), model.eval(), val_dl, optimizer, loss_fn,
                     train=False,
                     device=device, epoch=epoch,
                     print_batch_metrics=print_batch_metrics
@@ -207,32 +221,26 @@ def train(
                 # log val metrics to wandb
                 wandb_log['val/val_acc'] = val_accuracy
                 wandb_log['val/val_loss'] = val_loss
-                wandb_log['val/val_rre_sym'] = val_rre_sym
-                wandb_log['val/val_rre'] = val_rre
-                wandb_log['val/val_rte'] = val_rte
 
 
         # logging to wandb
         if wandb_logs:
             wandb_log['train/train_acc'] = train_accuracy
             wandb_log['train/train_loss'] = train_loss
-            wandb_log['train/train_rre_sym'] = train_rre_sym
-            wandb_log['train/train_rre'] = train_rre
-            wandb_log['train/train_rte'] = train_rte
             run.log(wandb_log)
 
         # break if req accuracy reached
         if (train_accuracy > acc_req):
             break
 
-        save_model(pnet, optimizer, save_path=cdir / f'epoch_{epoch}.pt')
-        save_model(pnet, optimizer, save_path=cdir / 'latest.pt')
+        save_model(model, optimizer, save_path=cdir / f'epoch_{epoch}.pt')
+        save_model(model, optimizer, save_path=cdir / 'latest.pt')
 
-    return pnet
+    return model
 
 def run_training(
-        model_cls, loss_fn,
-        pose_evaluator,
+        refiner_model_cls, model_cls, loss_fn,
+        model_load_checkpoint,
         batch_size = 8,
         epochs = 1000,
         lr = 0.0001,
@@ -257,9 +265,9 @@ def run_training(
     val_dl = DataLoader(val_ds, batch_size=batch_size, shuffle=True, collate_fn=pad_train, num_workers=2)
 
     trained_dfnet = train(
-        model_cls, loss_fn,
+        refiner_model_cls, model_cls, loss_fn,
         train_dl, val_dl, 
-        pose_evaluator,
+        model_load_checkpoint,
         epochs=epochs,
         acc_req=acc_req,
         lr=lr, 
@@ -275,25 +283,17 @@ def run_training(
 
 if __name__ == '__main__':
 
-    pose_evaluator = PoseEvaluator()
-
-    sym_list = []
-    for obj_name in OBJ_NAMES:
-        obj_data = pose_evaluator.objects_db[obj_name]
-        if obj_data['geometric_symmetry'] != 'no':
-            sym_list.append(OBJ_NAMES_TO_IDX[obj_name])
-        
-
     parser = argparse.ArgumentParser()
 
     parser.add_argument('-b', '--batches', type=int, default=16)
     parser.add_argument('-e', '--epochs', type=int, default=1000)
     parser.add_argument('-l', '--lr', type=float, default=0.0001)
+    parser.add_argument('--model_load_checkpoint', type=str, default='')
     parser.add_argument('--acc_req', type=float, default=0.95)
     parser.add_argument('--val_every', type=int, default=3)
     parser.add_argument('-c', '--checkpoint_dir', type=str, default='checkpoints/densefusion')
     parser.add_argument('--load_checkpoint', default=None)
-    parser.add_argument('--wandb', action='store_true')
+    parser.add_argument('-w', '--wandb', action='store_true')
     parser.add_argument('--print_batch_metrics', type=bool, default=True)
     parser.add_argument('--run_name', type=str, default='dfnet')
     parser.add_argument('-d', '--data_dir', type=str, default='processed_like_df')
@@ -303,8 +303,8 @@ if __name__ == '__main__':
     print(args)
 
     run_training(
-        DenseFuseNet, torch.nn.DataParallel(DenseFusionLoss(sym_list=sym_list, w = 0.015, reduction = 'mean')),
-        pose_evaluator,
+        DenseRefinerFuseNet, DenseFuseNet, global_pred_like_df_loss,
+        args.model_load_checkpoint,
         batch_size = args.batches,
         epochs = args.epochs,
         lr = args.lr,

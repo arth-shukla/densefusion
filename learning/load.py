@@ -1,6 +1,7 @@
 import torch
 from torch.utils.data import Dataset, DataLoader
 from torch.nn.utils.rnn import pad_sequence
+from learning.utils import OBJ_NAMES, OBJ_NAMES_TO_IDX
 import numpy as np
 import pickle
 
@@ -54,7 +55,7 @@ class PoseDataset(Dataset):
             rets.append(np.load(self.data_dir / f'{index}_target.npy'))
         # obj_idx required for any model to work
         meta = pickle.load(open(self.data_dir / f'{index}_meta.pkl', 'rb'))
-        rets.append(np.array([meta['obj_id']]))
+        rets.append(np.array([OBJ_NAMES_TO_IDX[meta['obj_name']]]))
         if self.train:
             rets.append(np.load(self.data_dir / f'{index}_pose.npy'))
 
