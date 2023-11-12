@@ -248,8 +248,8 @@ def run_training(
 
     train_ds = PoseDataset(data_dir=data_dir / 'train', cloud=True, rgb=True, model=True, choose=True, target=True)
     val_ds = PoseDataset(data_dir=data_dir / 'val', cloud=True, rgb=True, model=True, choose=True, target=True)
-    train_dl = DataLoader(train_ds, batch_size=batch_size, shuffle=True, collate_fn=pad_train, num_workers=2)
-    val_dl = DataLoader(val_ds, batch_size=batch_size, shuffle=True, collate_fn=pad_train, num_workers=2)
+    train_dl = DataLoader(train_ds, batch_size=batch_size, shuffle=True, collate_fn=pad_train, num_workers=min(batch_size, 6))
+    val_dl = DataLoader(val_ds, batch_size=batch_size, shuffle=True, collate_fn=pad_train, num_workers=min(batch_size, 6))
 
     trained_dfnet = train(
         model_cls, loss_fn,
@@ -271,15 +271,22 @@ if __name__ == '__main__':
 
     pose_evaluator = PoseEvaluator()
 
-    sym_list = []
+    inf_sim, n_sim, no_sim = [], [], []
     for obj_name in OBJ_NAMES:
         obj_data = pose_evaluator.objects_db[obj_name]
         # if obj_data['geometric_symmetry'] != 'no':
         #     sym_list.append(OBJ_NAMES_TO_IDX[obj_name])
         if obj_data['rot_axis'] is not None:
-            sym_list.append(OBJ_NAMES_TO_IDX[obj_name])
+            inf_sim.append(OBJ_NAMES_TO_IDX[obj_name])
+        elif len(obj_data['sym_rots']) > 1:
+            n_sim.append(OBJ_NAMES_TO_IDX[obj_name])
+        else:
+            no_sim.append(OBJ_NAMES_TO_IDX[obj_name])
+
+    sym_rots = dict((i, pose_evaluator.objects_db[IDX_TO_OBJ_NAMES[i]]['sym_rots']) for i in range(len(OBJ_NAMES)))
         
-    print(sym_list)
+    print(inf_sim, n_sim, no_sim, sep='\n')
+    print(dict((i, sym_rots[i].shape) for i in range(len(sym_rots))))
 
     parser = argparse.ArgumentParser()
 
@@ -300,7 +307,7 @@ if __name__ == '__main__':
     print(args)
 
     run_training(
-        DenseFuseNet, torch.nn.DataParallel(DenseFusionLoss(sym_list=sym_list, w = 0.015, reduction = 'mean')),
+        DenseFuseNet, torch.nn.DataParallel(DenseFusionLoss(inf_sim=inf_sim, n_sim=n_sim, sym_rots=sym_rots, w=0.015, reduction='mean')),
         batch_size = args.batches,
         epochs = args.epochs,
         lr = args.lr,
