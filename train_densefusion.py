@@ -274,7 +274,9 @@ if __name__ == '__main__':
     sym_list = []
     for obj_name in OBJ_NAMES:
         obj_data = pose_evaluator.objects_db[obj_name]
-        if obj_data['geometric_symmetry'] != 'no':
+        # if obj_data['geometric_symmetry'] != 'no':
+        #     sym_list.append(OBJ_NAMES_TO_IDX[obj_name])
+        if obj_data['rot_axis'] is not None:
             sym_list.append(OBJ_NAMES_TO_IDX[obj_name])
         
     print(sym_list)
