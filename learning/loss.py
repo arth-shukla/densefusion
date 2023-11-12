@@ -205,3 +205,34 @@ def global_pred_like_df_loss(
         loss = loss.sum()
 
     return loss
+
+
+def global_pred_quat_to_rot(bquats: torch.Tensor, base=1e-15):
+    """
+        bquats: Bs x 4 x Ps
+        base: avoids zero-div error w/ norms when converting to unit quaternion
+
+        output: Bs x Ps x 3 x 3
+    """
+
+    bs = bquats.size(0)
+
+    bquats += torch.tensor(base)
+    bquats = bquats / torch.norm(bquats, dim=1).view(bs, 1)
+
+    r11 = 1 - 2*(bquats[:, 2]**2 + bquats[:, 3]**2)
+    r12 = 2*(bquats[:, 1]*bquats[:, 2] - bquats[:, 0]*bquats[:, 3])
+    r13 = 2*(bquats[:, 1]*bquats[:, 3] + bquats[:, 0]*bquats[:, 2])
+
+    r21 = 2*(bquats[:, 1]*bquats[:, 2] + bquats[:, 0]*bquats[:, 3])
+    r22 = 1 - 2*(bquats[:, 1]**2 + bquats[:, 3]**2)
+    r23 = 2*(bquats[:, 2]*bquats[:, 3] - bquats[:, 0]*bquats[:, 1])
+
+    r31 = 2*(bquats[:, 1]*bquats[:, 3] - bquats[:, 0]*bquats[:, 2])
+    r32 = 2*(bquats[:, 2]*bquats[:, 3] + bquats[:, 0]*bquats[:, 1])
+    r33 = 1 - 2*(bquats[:, 1]**2 + bquats[:, 2]**2)
+
+    R = torch.stack([r11, r12, r13, r21, r22, r23, r31, r32, r33])
+    R = R.transpose(1, 0)
+    R = R.view(bs, 3, 3)
+    return R
