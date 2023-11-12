@@ -4,7 +4,9 @@ from torch.nn.modules.loss import _Loss
 def densefusion_loss(
         R_pred: torch.Tensor, t_pred: torch.Tensor, c_pred: torch.Tensor,
         model: torch.Tensor, target: torch.Tensor, obj_idx,
-        sym_list=[], 
+        inf_sim=[],
+        n_sim=[],
+        sym_rots=dict(),
         w=0.015, reduction='mean',
     ):
     def pairwise_dist(xyz1, xyz2):
@@ -23,9 +25,10 @@ def densefusion_loss(
     ms = model.unsqueeze(1).repeat(1, ps, 1, 1).view(bs*ps, -1, 3)
     gt_transform = target.unsqueeze(1).repeat(1, ps, 1, 1).view(bs*ps, -1, 3)
 
-    pred_transform = torch.bmm(ms, Rps.transpose(2, 1)) + tps.unsqueeze(1)
-
-    if obj_idx[0].item() in sym_list:
+    obj_idx = obj_idx[0].item()
+    if obj_idx in inf_sim:
+        pred_transform = torch.bmm(ms, Rps.transpose(2, 1)) + tps.unsqueeze(1)
+        # chamfer loss
         closest_to_x_inds = []
         for b_range in chunks(range(bs*ps), bs):
             pwise_dist = pairwise_dist(pred_transform[b_range], gt_transform[b_range])
@@ -34,22 +37,31 @@ def densefusion_loss(
             closest_to_x_inds.append(closest)
         closest_gt_pts = torch.cat(closest_to_x_inds)
         dists = torch.mean(torch.norm(pred_transform - closest_gt_pts, dim=2), dim=1)
-    else:
-        dists = torch.mean(torch.norm(pred_transform - gt_transform, dim=2), dim=1)
-    loss = dists * cps - w * torch.log(cps)
-    
-    if reduction == 'mean':
+        loss = dists * cps - w * torch.log(cps)
         loss = loss.mean()
-    if reduction == 'sum':
-        loss = loss.sum()
+    elif obj_idx in n_sim:
+        srots = torch.from_numpy(sym_rots[obj_idx]).to(Rps.get_device()).float()
+        all_sims = ms @ srots.unsqueeze(1)
+        preds = all_sims @ Rps.transpose(2, 1) + tps.unsqueeze(1)
+        dists = torch.mean(torch.norm(preds - gt_transform, dim=3), dim=2)
+        losses = torch.mean(dists * cps - w * torch.log(cps), dim=1)
+        loss = torch.min(losses)
+    else:
+        pred_transform = torch.bmm(ms, Rps.transpose(2, 1)) + tps.unsqueeze(1)
+        # per-point mse loss
+        dists = torch.mean(torch.norm(pred_transform - gt_transform, dim=2), dim=1)
+        loss = dists * cps - w * torch.log(cps)
+        loss = loss.mean()
 
     return loss
 
 class DenseFusionLoss(_Loss):
 
-    def __init__(self, sym_list=[], w=0.015, reduction='mean'):
+    def __init__(self, inf_sim=[], n_sim=[], sym_rots=dict(), w=0.015, reduction='mean'):
         super().__init__()
-        self.sym_list = sym_list
+        self.inf_sim = inf_sim
+        self.n_sim = n_sim
+        self.sym_rots = sym_rots
         self.w = w
         self.reduction = reduction
 
@@ -62,7 +74,9 @@ class DenseFusionLoss(_Loss):
         return densefusion_loss(
             R_pred, t_pred, c_pred,
             model, target, obj_idx,
-            sym_list=self.sym_list,
+            inf_sim=self.inf_sim,
+            n_sim=self.n_sim,
+            sym_rots=self.sym_rots,
             w=self.w, reduction=self.reduction
         )
 
