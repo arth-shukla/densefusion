@@ -105,7 +105,7 @@ def train_step(
         t_pred = t_pred.transpose(2, 1)
 
         # calc loss
-        loss = loss_fn(R_pred, t_pred, c_pred, model, target, obj_idxs[0].item()).mean()
+        loss = loss_fn(R_pred, t_pred, c_pred, model, target, obj_idxs).mean()
         if train: loss.backward()
         step_loss += loss
 
