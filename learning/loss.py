@@ -25,7 +25,7 @@ def densefusion_loss(
 
     pred_transform = torch.bmm(ms, Rps.transpose(2, 1)) + tps.unsqueeze(1)
 
-    if True:
+    if obj_idx[0].item() in sym_list:
         closest_to_x_inds = []
         for b_range in chunks(range(bs*ps), bs):
             pwise_dist = pairwise_dist(pred_transform[b_range], gt_transform[b_range])
