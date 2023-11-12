@@ -30,7 +30,7 @@ def densefusion_loss(
         pred_transform = torch.bmm(ms, Rps.transpose(2, 1)) + tps.unsqueeze(1)
         # chamfer loss
         closest_to_x_inds = []
-        for b_range in chunks(range(bs*ps), bs):
+        for b_range in chunks(range(bs*ps), bs*3):
             pwise_dist = pairwise_dist(pred_transform[b_range], gt_transform[b_range])
             closest_inds = torch.argmin(pwise_dist, dim=1)
             closest = torch.stack([gt_transform[b][closest_inds[i]] for i, b in enumerate(b_range)])
