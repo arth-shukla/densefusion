@@ -179,3 +179,5 @@ raw_data
 processed_like_df
 processed_like_df.tar.gz
 hidden/
+processed_for_icp/
+processed_for_icp_2/
