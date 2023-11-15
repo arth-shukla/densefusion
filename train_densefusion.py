@@ -15,6 +15,11 @@ from pathlib import Path
 import os
 import time
 
+
+LR_RATE = 0.3
+W_RATE = 0.3
+
+
 def get_success_metrics(R_pred, t_pred, c_pred, R_gt, t_gt, obj_idxs):
     free = lambda x: x.detach().cpu().numpy()
     R_pred, t_pred, c_pred = free(R_pred), free(t_pred), free(c_pred)
@@ -175,6 +180,13 @@ def train(
     # run train loop
     for epoch in range(epochs):
 
+        
+        # if True: #decay:
+        #     lr = lr * LR_RATE
+        #     loss_fn.module.w = loss_fn.module.w * W_RATE
+        #     optimizer = torch.optim.Adam(pnet.parameters(), lr=lr)
+
+
         print(f'Starting epoch {epoch}...')
 
         train_accuracy, train_loss, train_rre_sym, train_rre, train_rte = train_step(
@@ -283,7 +295,7 @@ if __name__ == '__main__':
         else:
             no_sim.append(OBJ_NAMES_TO_IDX[obj_name])
 
-    sym_rots = dict((i, pose_evaluator.objects_db[IDX_TO_OBJ_NAMES[i]]['sym_rots']) for i in range(len(OBJ_NAMES)))
+    sym_rots = dict((OBJ_NAMES_TO_IDX[name], pose_evaluator.objects_db[name]['sym_rots']) for name in OBJ_NAMES)
         
     print(inf_sim, n_sim, no_sim, sep='\n')
     print(dict((i, sym_rots[i].shape) for i in range(len(sym_rots))))
