@@ -305,6 +305,7 @@ if __name__ == '__main__':
     parser.add_argument('-b', '--batches', type=int, default=16)
     parser.add_argument('-e', '--epochs', type=int, default=1000)
     parser.add_argument('-l', '--lr', type=float, default=0.0001)
+    parser.add_argument('--loss_w', type=float, default=0.015)
     parser.add_argument('--acc_req', type=float, default=0.95)
     parser.add_argument('--val_every', type=int, default=3)
     parser.add_argument('-c', '--checkpoint_dir', type=str, default='checkpoints/densefusion')
@@ -319,7 +320,7 @@ if __name__ == '__main__':
     print(args)
 
     run_training(
-        DenseFuseNet, torch.nn.DataParallel(DenseFusionLoss(inf_sim=inf_sim, n_sim=n_sim, sym_rots=sym_rots, w=0.015, reduction='mean')),
+        DenseFuseNet, torch.nn.DataParallel(DenseFusionLoss(inf_sim=inf_sim, n_sim=n_sim, sym_rots=sym_rots, w=args.w, reduction='mean')),
         batch_size = args.batches,
         epochs = args.epochs,
         lr = args.lr,
