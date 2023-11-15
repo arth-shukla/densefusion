@@ -49,7 +49,10 @@ def handle_dirs(checkpoint_dir, pnet, optimizer, load_checkpoint=None, run_name=
 
     if load_checkpoint is not None:
         print('Loading pnet and optimizer...')
-        pnet, optimizer = load_model(pnet, optimizer, load_path=c_overall_dir / f'{load_checkpoint}' / 'latest.pt')
+        if '.pt' in str(load_checkpoint):
+            pnet, optimizer = load_model(pnet, optimizer, load_path=c_overall_dir / f'{load_checkpoint}')
+        else:
+            pnet, optimizer = load_model(pnet, optimizer, load_path=c_overall_dir / f'{load_checkpoint}' / 'latest.pt')
 
     cnum = 0
     for dirname in os.listdir(c_overall_dir):
