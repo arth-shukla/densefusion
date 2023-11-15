@@ -3,10 +3,12 @@ from typing import Optional
 import torch
 import torch.nn as nn
 import numpy as np
-from learning.loss import densefusion_symmetry_aware_loss, densefusion_symmetry_unaware_loss, rre_rte_loss, quat_to_rot, like_df_loss, global_pred_like_df_loss, global_pred_quat_to_rot
+from learning.loss import DenseFusionLoss, quat_to_rot, global_pred_quat_to_rot
 from learning.densefusion import DenseFuseNet
 from learning.densefusion_refine import DenseRefinerFuseNet
 from learning.utils import compute_rre, compute_rte
+from learning.utils import compute_rre, compute_rte, OBJ_NAMES, OBJ_NAMES_TO_IDX, IDX_TO_OBJ_NAMES
+from benchmark_utils.pose_evaluator import PoseEvaluator
 
 import wandb
 import uuid
@@ -14,6 +16,11 @@ import uuid
 from pathlib import Path
 import os
 import time
+
+
+LR_RATE = 0.3
+W_RATE = 0.3
+
 
 def handle_dirs(checkpoint_dir, refiner, optimizer, model, model_load_checkpoint, load_checkpoint=None, run_name=None):
     c_overall_dir = Path(checkpoint_dir)
@@ -198,6 +205,13 @@ def train(
 
         print(f'Starting epoch {epoch}...')
 
+
+        if epoch >= 5:
+            lr = lr * LR_RATE
+            loss_fn.module.w = loss_fn.module.w * W_RATE
+            optimizer = torch.optim.Adam(refiner.parameters(), lr=lr)
+
+
         train_accuracy, train_loss = train_step(
             refiner.train(), model.eval(), train_dl, optimizer, loss_fn,
             train=True,
@@ -283,6 +297,25 @@ def run_training(
 
 if __name__ == '__main__':
 
+    pose_evaluator = PoseEvaluator()
+
+    inf_sim, n_sim, no_sim = [], [], []
+    for obj_name in OBJ_NAMES:
+        obj_data = pose_evaluator.objects_db[obj_name]
+        # if obj_data['geometric_symmetry'] != 'no':
+        #     sym_list.append(OBJ_NAMES_TO_IDX[obj_name])
+        if obj_data['rot_axis'] is not None:
+            inf_sim.append(OBJ_NAMES_TO_IDX[obj_name])
+        elif len(obj_data['sym_rots']) > 1:
+            n_sim.append(OBJ_NAMES_TO_IDX[obj_name])
+        else:
+            no_sim.append(OBJ_NAMES_TO_IDX[obj_name])
+
+    sym_rots = dict((OBJ_NAMES_TO_IDX[name], pose_evaluator.objects_db[name]['sym_rots']) for name in OBJ_NAMES)
+        
+    print(inf_sim, n_sim, no_sim, sep='\n')
+    print(dict((i, sym_rots[i].shape) for i in range(len(sym_rots))))
+
     parser = argparse.ArgumentParser()
 
     parser.add_argument('-b', '--batches', type=int, default=16)
@@ -303,7 +336,7 @@ if __name__ == '__main__':
     print(args)
 
     run_training(
-        DenseRefinerFuseNet, DenseFuseNet, global_pred_like_df_loss,
+        DenseRefinerFuseNet, DenseFuseNet, torch.nn.DataParallel(DenseFusionLoss(inf_sim=inf_sim, n_sim=n_sim, sym_rots=sym_rots, w=0.015, reduction='mean')),
         args.model_load_checkpoint,
         batch_size = args.batches,
         epochs = args.epochs,

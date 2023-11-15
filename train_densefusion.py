@@ -183,7 +183,7 @@ def train(
         
         if True: #decay:
             lr = lr * LR_RATE
-            loss_fn.w = loss_fn.w * W_RATE
+            loss_fn.module.w = loss_fn.module.w * W_RATE
             optimizer = torch.optim.Adam(pnet.parameters(), lr=lr)
 
 
