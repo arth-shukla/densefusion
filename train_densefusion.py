@@ -181,10 +181,10 @@ def train(
     for epoch in range(epochs):
 
         
-        if True: #decay:
-            lr = lr * LR_RATE
-            loss_fn.module.w = loss_fn.module.w * W_RATE
-            optimizer = torch.optim.Adam(pnet.parameters(), lr=lr)
+        # if True: #decay:
+        #     lr = lr * LR_RATE
+        #     loss_fn.module.w = loss_fn.module.w * W_RATE
+        #     optimizer = torch.optim.Adam(pnet.parameters(), lr=lr)
 
 
         print(f'Starting epoch {epoch}...')
