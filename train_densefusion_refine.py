@@ -206,7 +206,7 @@ def train(
         print(f'Starting epoch {epoch}...')
 
 
-        if epoch >= 5:
+        if epoch >= 30:
             lr = lr * LR_RATE
             loss_fn.module.w = loss_fn.module.w * W_RATE
             optimizer = torch.optim.Adam(refiner.parameters(), lr=lr)
