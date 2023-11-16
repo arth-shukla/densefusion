@@ -69,7 +69,10 @@ class PoseDataset(Dataset):
             base[:choose.shape[0],:choose.shape[1]] = choose
             rets.append(base)
         if self.target:
-            rets.append(np.load(self.data_dir / f'{index}_target.npy'))
+            target = np.load(self.data_dir / f'{index}_target.npy')
+            if self.add_noise:
+                target += add_t
+            rets.append(target)
         # obj_idx required for any model to work
         meta = pickle.load(open(self.data_dir / f'{index}_meta.pkl', 'rb'))
         rets.append(np.array([OBJ_NAMES_TO_IDX[meta['obj_name']]]))
