@@ -166,6 +166,8 @@ def train(
     # make checkpoint dir and load checkpoints
     cdir, pnet, optimizer = handle_dirs(checkpoint_dir, pnet, optimizer, load_checkpoint=load_checkpoint, run_name=run_name)
 
+    print(optimizer.state_dict())
+
     if wandb_logs:
         run = wandb.init(
             project='PointNet 6D Pose Est',
