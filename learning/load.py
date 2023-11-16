@@ -2,6 +2,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 from torch.nn.utils.rnn import pad_sequence
 from learning.utils import OBJ_NAMES, OBJ_NAMES_TO_IDX
+from PIL import Image
 import numpy as np
 import pickle
 
@@ -53,7 +54,8 @@ class PoseDataset(Dataset):
         if self.rgb:
             rgb = np.load(self.data_dir / f'{index}_cropped_rgb.npy')
             if self.add_noise:
-                rgb = self.img_noise(rgb)
+                rgb_pil = Image.fromarray(np.uint8(rgb * 255)).convert('RGB')
+                rgb = np.array(self.img_noise(rgb_pil)) / 255
             # rets.append(rgb)
             base = np.zeros((*self.image_base_size, rgb.shape[-1]))
             base[:rgb.shape[0],:rgb.shape[1]] = rgb

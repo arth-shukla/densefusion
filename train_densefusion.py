@@ -267,8 +267,8 @@ def run_training(
 
     train_ds = PoseDataset(data_dir=data_dir / 'train', cloud=True, rgb=True, model=True, choose=True, target=True, add_noise=add_train_noise)
     val_ds = PoseDataset(data_dir=data_dir / 'val', cloud=True, rgb=True, model=True, choose=True, target=True)
-    train_dl = DataLoader(train_ds, batch_size=batch_size, shuffle=True, collate_fn=pad_train, num_workers=0)
-    val_dl = DataLoader(val_ds, batch_size=batch_size, shuffle=True, collate_fn=pad_train, num_workers=0)
+    train_dl = DataLoader(train_ds, batch_size=batch_size, shuffle=True, collate_fn=pad_train, num_workers=2)
+    val_dl = DataLoader(val_ds, batch_size=batch_size, shuffle=True, collate_fn=pad_train, num_workers=2)
 
     trained_dfnet = train(
         model_cls, loss_fn,
