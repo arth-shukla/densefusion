@@ -257,6 +257,7 @@ def run_training(
         print_batch_metrics=True,
         run_name = 'pnet',
         data_dir = 'processed_data_new',
+        add_train_noise = False,
     ):
 
     from learning.load import PoseDataset, pad_train
@@ -264,7 +265,7 @@ def run_training(
 
     data_dir = Path(data_dir)
 
-    train_ds = PoseDataset(data_dir=data_dir / 'train', cloud=True, rgb=True, model=True, choose=True, target=True)
+    train_ds = PoseDataset(data_dir=data_dir / 'train', cloud=True, rgb=True, model=True, choose=True, target=True, add_noise=add_train_noise)
     val_ds = PoseDataset(data_dir=data_dir / 'val', cloud=True, rgb=True, model=True, choose=True, target=True)
     train_dl = DataLoader(train_ds, batch_size=batch_size, shuffle=True, collate_fn=pad_train, num_workers=0)
     val_dl = DataLoader(val_ds, batch_size=batch_size, shuffle=True, collate_fn=pad_train, num_workers=0)
@@ -320,6 +321,7 @@ if __name__ == '__main__':
     parser.add_argument('--print_batch_metrics', type=bool, default=True)
     parser.add_argument('--run_name', type=str, default='dfnet')
     parser.add_argument('-d', '--data_dir', type=str, default='processed_like_df')
+    parser.add_argument('--add_train_noise', action='store_true')
 
     args = parser.parse_args()
 
@@ -337,5 +339,6 @@ if __name__ == '__main__':
         wandb_logs = args.wandb, 
         print_batch_metrics = args.print_batch_metrics,
         run_name = args.run_name,
-        data_dir = args.data_dir
+        data_dir = args.data_dir,
+        add_train_noise = args.add_train_noise,
     )

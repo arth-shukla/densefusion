@@ -16,6 +16,7 @@ class PoseDataset(Dataset):
             train=True,
             cloud=False, cloud_rgb=False, rgb=False, model=False, choose=False, target=False,
             image_base_size=(240, 240),
+            add_noise=False,
             transform=torch.from_numpy,
         ):
         self.data_dir = Path(data_dir)
@@ -27,18 +28,32 @@ class PoseDataset(Dataset):
 
         self.len = int(len(os.listdir(data_dir)) / (8 if train else 6))
 
+        self.add_noise = add_noise
+        if self.add_noise:
+            import torchvision.transforms as transforms
+            self.img_noise = transforms.ColorJitter(0.2, 0.2, 0.2, 0.05)
+            self.translate_noise = 0.03
+
         # self.dps = [None] * len(self.obj_data)
 
     def __getitem__(self, index):
 
         rets = []
 
+        if self.add_noise:
+            add_t = self.translate_noise * (2 * np.random.rand(3) - 1)
+
         if self.cloud:
-            rets.append(np.load(self.data_dir / f'{index}_point_cloud.npy'))
+            cloud = np.load(self.data_dir / f'{index}_point_cloud.npy')
+            if self.add_noise:
+                cloud += add_t
+            rets.append(cloud)
         if self.cloud_rgb:
             rets.append(np.load(self.data_dir / f'{index}_point_cloud_rgb.npy'))
         if self.rgb:
             rgb = np.load(self.data_dir / f'{index}_cropped_rgb.npy')
+            if self.add_noise:
+                rgb = self.img_noise(rgb)
             # rets.append(rgb)
             base = np.zeros((*self.image_base_size, rgb.shape[-1]))
             base[:rgb.shape[0],:rgb.shape[1]] = rgb
@@ -57,7 +72,10 @@ class PoseDataset(Dataset):
         meta = pickle.load(open(self.data_dir / f'{index}_meta.pkl', 'rb'))
         rets.append(np.array([OBJ_NAMES_TO_IDX[meta['obj_name']]]))
         if self.train:
-            rets.append(np.load(self.data_dir / f'{index}_pose.npy'))
+            pose = np.load(self.data_dir / f'{index}_pose.npy')
+            if self.add_noise:
+                pose[:3, 3] += add_t
+            rets.append(pose)
 
         if self.transform:
             for i, x in enumerate(rets):
