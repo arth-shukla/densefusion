@@ -137,7 +137,7 @@ def process_raw_data(output_dir = 'processed_data'):
             inv_extrinsic = np.linalg.inv(meta['extrinsic'])
 
             for obj_id, obj_name in zip(meta['object_ids'], meta['object_names']):
-                mask = label == obj_id
+                mask = (label.copy() == obj_id)
 
                 keep_ms, keep_ns = np.nonzero(mask > 0)
                 if len(keep_ms) > max_ptcld_len:
@@ -147,7 +147,7 @@ def process_raw_data(output_dir = 'processed_data'):
                     choose = np.zeros_like(mask)
                     choose[(keep_ms, keep_ns)] = 1
                 else:
-                    choose = mask
+                    choose = mask.copy()
                 
                 scale = np.array(meta['scales'][obj_id])
 
@@ -156,8 +156,10 @@ def process_raw_data(output_dir = 'processed_data'):
                     continue
 
                 rmin, rmax, cmin, cmax = get_bbox(mask_to_bbox(mask))
-                cropped_img = color[rmin:rmax, cmin:cmax]
+                color_masked = color.copy() * mask.reshape(*mask.shape, 1)
+                cropped_img = color_masked[rmin:rmax, cmin:cmax]
                 choose = choose[rmin:rmax, cmin:cmax]
+                # mask = mask[rmin:rmax, cmin:cmax]
 
                 model = np.array(o3d.io.read_point_cloud(str(processed_models_dir / f'{obj_name}.pcd')).points) * scale
                 new_meta = dict(
@@ -168,6 +170,7 @@ def process_raw_data(output_dir = 'processed_data'):
                 np.save(output_dir / f'{dp_num}_point_cloud', pts)
                 np.save(output_dir / f'{dp_num}_point_cloud_rgb', pts_rgb)
                 np.save(output_dir / f'{dp_num}_cropped_rgb', cropped_img)
+                # np.save(output_dir / f'{dp_num}_mask', mask)
                 np.save(output_dir / f'{dp_num}_model', model)
                 np.save(output_dir / f'{dp_num}_choose', choose)
                 with open(output_dir / f'{dp_num}_meta.pkl', 'wb') as handle:
@@ -221,4 +224,4 @@ def process_raw_data(output_dir = 'processed_data'):
     process_raw_obs_data(raw_train_obj_dir, train_scene_names, processed_train_dir, processed_models_dir)
 
 if __name__ == '__main__':
-    process_raw_data(output_dir='processed_data')
+    process_raw_data(output_dir='processed_like_df_2')
