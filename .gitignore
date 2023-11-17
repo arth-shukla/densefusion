@@ -176,8 +176,12 @@ wandb/*
 processed_data_new.tar.gz
 hw2.ipynb
 raw_data
-processed_like_df
+processed_like_df/
 processed_like_df.tar.gz
 hidden/
 processed_for_icp/
 processed_for_icp_2/
+processed_like_df_2/
+processed_like_df_2.tar.gz
+processed_occlusions/
+processed_occlusions.tar.gz
