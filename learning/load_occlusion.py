@@ -39,7 +39,7 @@ class PoseOcclusionDataset(Dataset):
         self.transform = transform
         self.max_ptcld_len = max_ptcld_len
 
-        self.len = int(len(os.listdir(data_dir)) / (5 if train else 3))
+        self.len = int((len(os.listdir(data_dir)) - 5) / (5 if train else 3))
 
         self.add_noise = add_noise
         if self.add_noise:
