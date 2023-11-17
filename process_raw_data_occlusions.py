@@ -107,7 +107,12 @@ def process_raw_data(output_dir = 'processed_data'):
 
         os.makedirs(output_dir, exist_ok=True)
         scene_dir = output_dir / 'scene_masks'
-        os.makedirs(scene_dir, exist_ok=True)
+        rgb_dir = output_dir / 'rgbs'
+        depth_dir = output_dir / 'depths'
+        intrinsic_dir = output_dir / 'intrinsics'
+        inv_extrinsic_dir = output_dir / 'inv_extrinsics'
+        for dirname in [scene_dir, rgb_dir, depth_dir, intrinsic_dir, inv_extrinsic_dir]:
+            os.makedirs(dirname, exist_ok=True)
 
         for scene in tqdm(scene_names):
             color_path = raw_obj_dir / f'{scene}_color_kinect.png'
@@ -121,7 +126,7 @@ def process_raw_data(output_dir = 'processed_data'):
             meta = pickle.load(open(meta_path, 'rb'))
 
             scene_mask = np.zeros_like(label)
-
+            intrinsic = meta['intrinsic']
             inv_extrinsic = np.linalg.inv(meta['extrinsic'])
 
             for obj_id, obj_name in zip(meta['object_ids'], meta['object_names']):
@@ -134,19 +139,15 @@ def process_raw_data(output_dir = 'processed_data'):
                 scale = np.array(meta['scales'][obj_id])
 
                 rmin, rmax, cmin, cmax = get_bbox(mask_to_bbox(mask))
-                color_masked = color.copy() * mask.reshape(*mask.shape, 1)
-
                 model = np.array(o3d.io.read_point_cloud(str(processed_models_dir / f'{obj_name}.pcd')).points) * scale
                 new_meta = dict(
                     obj_id=obj_id,
                     obj_name=obj_name,
-                    depth=depth,
-                    intrinsic=meta['intrinsic'], inv_extrinsic=inv_extrinsic,
                     rmin=rmin, rmax=rmax,
                     cmin=cmin, cmax=cmax,
+                    scene_num=scene_num,
                 )
 
-                np.save(output_dir / f'{dp_num}_rgb', color_masked)
                 np.save(output_dir / f'{dp_num}_model', model)
                 np.save(output_dir / f'{dp_num}_mask', mask)
                 with open(output_dir / f'{dp_num}_meta.pkl', 'wb') as handle:
@@ -162,6 +163,10 @@ def process_raw_data(output_dir = 'processed_data'):
 
             scene_mask = scene_mask > 0
             np.save(scene_dir / f'{scene_num}_scene_mask', scene_mask)
+            np.save(rgb_dir / f'{scene_num}_rgb', color)
+            np.save(depth_dir / f'{scene_num}_depth', depth)
+            np.save(intrinsic_dir / f'{scene_num}_intrinsic', intrinsic)
+            np.save(inv_extrinsic_dir / f'{scene_num}_inv_extrinsic', inv_extrinsic)
             scene_num += 1
     
     raw_data_dir = Path('raw_data')

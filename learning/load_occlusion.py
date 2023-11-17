@@ -24,6 +24,14 @@ class PoseOcclusionDataset(Dataset):
             n_occlusion_masks=2,
         ):
         self.data_dir = Path(data_dir)
+        self.scene_mask_dir = self.data_dir / 'scene_masks'
+        self.rgb_dir = self.data_dir / 'rgbs'
+        self.depth_dir = self.data_dir / 'depths'
+        self.instrinsic_dir = self.data_dir / 'intrinsics'
+        self.inv_extrinsic_dir = self.data_dir / 'inv_extrinsics'
+
+        self.n_scene_masks = len(os.listdir(self.scene_mask_dir))
+        self.n_occlusion_masks = n_occlusion_masks
 
         self.train = train
         self.cloud, self.cloud_rgb, self.rgb, self.model, self.choose, self.target = cloud, cloud_rgb, rgb, model, choose, target
@@ -31,28 +39,40 @@ class PoseOcclusionDataset(Dataset):
         self.transform = transform
         self.max_ptcld_len = max_ptcld_len
 
-        self.len = int(len(os.listdir(data_dir)) / (8 if train else 6))
+        self.len = int(len(os.listdir(data_dir)) / (6 if train else 4))
 
         self.add_noise = add_noise
         if self.add_noise:
             import torchvision.transforms as transforms
-            self.scene_mask_dir = self.data_dir / 'scene_masks'
-            self.n_scene_masks = len(os.listdir(self.scene_mask_dir))
             self.img_noise = transforms.ColorJitter(0.2, 0.2, 0.2, 0.05)
             self.translate_noise = 0.03
-            self.n_occlusion_masks = n_occlusion_masks
 
     def __getitem__(self, index):
 
         meta = pickle.load(open(self.data_dir / f'{index}_meta.pkl', 'rb'))
-        depth, intrinsic, inv_extrinsic = meta['depth'], meta['intrinsic'], meta['inv_extrinsic']
         rmin, rmax, cmin, cmax = meta['rmin'], meta['rmax'], meta['cmin'], meta['cmax']
-        rgb = np.load(self.data_dir / f'{index}_rgb.npy')
-        mask = np.load(self.data_dir / f'{index}_mask.npy')
+        scene_num = meta['scene_num']
 
-        for _ in range(self.n_occlusion_masks):
+        rgb = np.load(self.rgb_dir / f'{scene_num}_rgb.npy')
+        depth = np.load(self.depth_dir / f'{scene_num}_depth.npy')
+        intrinsic = np.load(self.instrinsic_dir / f'{scene_num}_intrinsic.npy')
+        inv_extrinsic = np.load(self.inv_extrinsic_dir / f'{scene_num}_inv_extrinsic.npy')
+
+        mask = np.load(self.data_dir / f'{index}_mask.npy').astype(np.int8)
+        n_successful_occlusions = 0
+        mask_len = np.sum(mask)
+        while True:
             scene_mask = np.load(self.scene_mask_dir / f'{random.randint(0, self.n_scene_masks)}_scene_mask.npy').astype(np.int8)
-            mask *= -scene_mask + 1
+            new_mask = mask * (-scene_mask + 1)
+            new_mask_len = np.sum(new_mask)
+            if mask_len >= 500 and new_mask_len > 500:
+                mask = new_mask
+                n_successful_occlusions += 1
+            elif mask_len < 500 and new_mask_len > 0:
+                mask = new_mask
+                n_successful_occlusions += 1
+            if n_successful_occlusions == self.n_occlusion_masks:
+                break
 
         keep_ms, keep_ns = np.nonzero(mask > 0)
         if len(keep_ms) > self.max_ptcld_len:
@@ -66,6 +86,7 @@ class PoseOcclusionDataset(Dataset):
 
         cloud, cloud_rgb = self.get_ptcld_from_depth_using_mask(depth, choose, rgb, intrinsic, inv_extrinsic)
 
+        rgb = rgb * mask.reshape(*mask.shape, 1)
         rgb = rgb[rmin:rmax, cmin:cmax]
         choose = choose[rmin:rmax, cmin:cmax]
 

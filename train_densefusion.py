@@ -258,7 +258,7 @@ def run_training(
         run_name = 'pnet',
         data_dir = 'processed_data_new',
         add_train_noise = False,
-        add_occlusions = False,
+        occlusion_data_dir = None,
     ):
 
     from learning.load import PoseDataset, pad_train
@@ -267,8 +267,9 @@ def run_training(
 
     data_dir = Path(data_dir)
 
-    if add_occlusions:
-        train_ds = PoseOcclusionDataset(data_dir=data_dir / 'train', cloud=True, rgb=True, model=True, choose=True, target=True, add_noise=add_train_noise)
+    if occlusion_data_dir is not None:
+        occlusion_data_dir = Path(occlusion_data_dir)
+        train_ds = PoseOcclusionDataset(data_dir=occlusion_data_dir / 'train', cloud=True, rgb=True, model=True, choose=True, target=True, add_noise=add_train_noise)
     else:
         train_ds = PoseDataset(data_dir=data_dir / 'train', cloud=True, rgb=True, model=True, choose=True, target=True, add_noise=add_train_noise)
     val_ds = PoseDataset(data_dir=data_dir / 'val', cloud=True, rgb=True, model=True, choose=True, target=True)
@@ -327,7 +328,7 @@ if __name__ == '__main__':
     parser.add_argument('--run_name', type=str, default='dfnet')
     parser.add_argument('-d', '--data_dir', type=str, default='processed_like_df')
     parser.add_argument('--add_train_noise', action='store_true')
-    parser.add_argument('--add_occlusions', action='store_true')
+    parser.add_argument('--occlusion_data_dir', default=None)
 
     args = parser.parse_args()
 
@@ -347,5 +348,5 @@ if __name__ == '__main__':
         run_name = args.run_name,
         data_dir = args.data_dir,
         add_train_noise = args.add_train_noise,
-        add_occlusions = args.add_occlusions
+        occlusion_data_dir = args.occlusion_data_dir,
     )
