@@ -39,7 +39,7 @@ class PoseOcclusionDataset(Dataset):
         self.transform = transform
         self.max_ptcld_len = max_ptcld_len
 
-        self.len = int(len(os.listdir(data_dir)) / (6 if train else 4))
+        self.len = int(len(os.listdir(data_dir)) / (5 if train else 3))
 
         self.add_noise = add_noise
         if self.add_noise:
@@ -62,7 +62,7 @@ class PoseOcclusionDataset(Dataset):
         n_successful_occlusions = 0
         mask_len = np.sum(mask)
         while True:
-            scene_mask = np.load(self.scene_mask_dir / f'{random.randint(0, self.n_scene_masks)}_scene_mask.npy').astype(np.int8)
+            scene_mask = np.load(self.scene_mask_dir / f'{random.randint(0, self.n_scene_masks-1)}_scene_mask.npy').astype(np.int8)
             new_mask = mask * (-scene_mask + 1)
             new_mask_len = np.sum(new_mask)
             if mask_len >= 500 and new_mask_len > 500:
