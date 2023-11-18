@@ -26,6 +26,7 @@ def get_success_metrics(R_pred, t_pred, c_pred, R_gt, t_gt, obj_idxs):
     R_gt, t_gt = free(R_gt), free(t_gt)
 
     s, rresy, rre, rte = [], [], [], []
+    s_rre, s_rte = [], []
     for b in range(R_pred.shape[0]):
         evaluation = pose_evaluator.evaluate(
             IDX_TO_OBJ_NAMES[obj_idxs[b].item()],
@@ -35,13 +36,15 @@ def get_success_metrics(R_pred, t_pred, c_pred, R_gt, t_gt, obj_idxs):
             t_gt[b],
         )
         s.append(evaluation['rre_symmetry'] <= 5 and evaluation['rte'] <= 0.01)
+        s_rre.append(evaluation['rre_symmetry'] <= 5)
+        s_rte.append(evaluation['rte'] <= 0.01)
         rresy.append(evaluation['rre_symmetry'])
         rre.append(evaluation['rre'])
         rte.append(evaluation['rte'])
     print(rresy)
     print(rre)
     print(rte)
-    return np.sum(s), np.mean(rresy), np.mean(rre), np.mean(rte)
+    return np.sum(s), np.sum(s_rre), np.sum(s_rte), np.mean(rresy), np.mean(rre), np.mean(rte)
 
 def handle_dirs(checkpoint_dir, pnet, optimizer, load_checkpoint=None, run_name=None):
     c_overall_dir = Path(checkpoint_dir)
@@ -88,6 +91,7 @@ def train_step(
 
     print_pref = 'train' if train else 'val'
     num_data_points, tot_successes, tot_rre_sym, tot_rre, tot_rte = 0, 0, 0, 0, 0
+    tot_s_rre, tot_s_rte = 0, 0
     step_loss = 0
     for iter_num, (cloud, rgb, model, choose, target, obj_idxs, pose) in enumerate(iter(dl)):
         num_data_points += batch_size
@@ -119,23 +123,27 @@ def train_step(
         # descent step
         if train: optimizer.step()
 
-        successes, rre_sym, rre, rte = get_success_metrics(R_pred, t_pred, c_pred, pose[:, :3, :3], pose[:, :3, 3], obj_idxs)
+        successes, s_rre, s_rte, rre_sym, rre, rte = get_success_metrics(R_pred, t_pred, c_pred, pose[:, :3, :3], pose[:, :3, 3], obj_idxs)
         tot_successes += successes
+        tot_s_rre += s_rre
+        tot_s_rte += s_rte
         tot_rre_sym += rre_sym
         tot_rre += rre
         tot_rte += rte
             
         if print_batch_metrics:
-            print(f'\t\tepoch: {epoch}\titer: {iter_num+1}/{len(dl)}\t{print_pref}_acc: {successes/batch_size:.4f}\t{print_pref}_loss: {loss.item():.4f}\t{print_pref}_running_acc: {tot_successes / num_data_points:.4f}\t{print_pref}_rre_sym={rre_sym:.4f}\t{print_pref}_rre={rre:.4f}\t{print_pref}_rte={rte:.4f}')
+            print(f'\t\tepoch: {epoch}\titer: {iter_num+1}/{len(dl)}\t{print_pref}_acc: {successes/batch_size:.4f}\t{print_pref}_loss: {loss.item():.4f}\t{print_pref}_running_acc: {tot_successes / num_data_points:.4f}\t{print_pref}_rre_sym={rre_sym:.4f}\t{print_pref}_rre={rre:.4f}\t{print_pref}_rte={rte:.4f}\t{print_pref}_rre_acc={s_rre/batch_size:.4f}\t{print_pref}_rte_acc={s_rte/batch_size:.4f}\t{print_pref}_running_rre_acc={tot_s_rre/num_data_points:.4f}\t{print_pref}_running_rte_acc={tot_s_rte/num_data_points:.4f}')
 
     step_accuracy = tot_successes / num_data_points
+    rre_acc = tot_s_rre / num_data_points
+    rte_acc = tot_s_rte / num_data_points
     tot_rre_sym /= len(dl)
     tot_rre /= len(dl)
     tot_rte /= len(dl)
     step_loss = step_loss / len(dl)
-    print(f'epoch: {epoch}\t{print_pref}_acc: {step_accuracy}\t{print_pref}_loss: {step_loss}\t{print_pref}_rre_sym: {tot_rre_sym}\t{print_pref}_rre: {tot_rre}\t{print_pref}_rte: {tot_rte}')
+    print(f'epoch: {epoch}\t{print_pref}_acc: {step_accuracy}\t{print_pref}_loss: {step_loss}\t{print_pref}_rre_sym: {tot_rre_sym}\t{print_pref}_rre: {tot_rre}\t{print_pref}_rte: {tot_rte}\t{print_pref}_rre_acc={rre_acc:.4f}\t{print_pref}_rte_acc={rte_acc:.4f}')
     
-    return step_accuracy, step_loss, tot_rre_sym, tot_rre, tot_rte
+    return step_accuracy, rre_acc, rte_acc, step_loss, tot_rre_sym, tot_rre, tot_rte
 
 def train(
         model_cls, loss_fn,
@@ -195,7 +203,7 @@ def train(
 
         print(f'Starting epoch {epoch}...')
 
-        train_accuracy, train_loss, train_rre_sym, train_rre, train_rte = train_step(
+        train_accuracy, train_rre_acc, train_rte_acc, train_loss, train_rre_sym, train_rre, train_rte = train_step(
             pnet.train(), train_dl, optimizer, loss_fn,
             batch_size=batch_size,
             train=True,
@@ -209,7 +217,7 @@ def train(
         # validation + wandb val visualizing
         if epoch % run_val_every == 0 and run_val_every > 0:
             with torch.no_grad():
-                val_accuracy, val_loss, val_rre_sym, val_rre, val_rte = train_step(
+                val_accuracy, val_rre_acc, val_rte_acc, val_loss, val_rre_sym, val_rre, val_rte = train_step(
                     pnet.eval(), val_dl, optimizer, loss_fn,
                     batch_size=batch_size,
                     train=False,
@@ -220,6 +228,8 @@ def train(
             if wandb_logs:
                 # log val metrics to wandb
                 wandb_log['val/val_acc'] = val_accuracy
+                wandb_log['val/train_rre_acc'] = val_rre_acc
+                wandb_log['val/train_rte_acc'] = val_rte_acc
                 wandb_log['val/val_loss'] = val_loss
                 wandb_log['val/val_rre_sym'] = val_rre_sym
                 wandb_log['val/val_rre'] = val_rre
@@ -229,6 +239,8 @@ def train(
         # logging to wandb
         if wandb_logs:
             wandb_log['train/train_acc'] = train_accuracy
+            wandb_log['train/train_rre_acc'] = train_rre_acc
+            wandb_log['train/train_rte_acc'] = train_rte_acc
             wandb_log['train/train_loss'] = train_loss
             wandb_log['train/train_rre_sym'] = train_rre_sym
             wandb_log['train/train_rre'] = train_rre
