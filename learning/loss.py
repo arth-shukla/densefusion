@@ -19,8 +19,8 @@ def densefusion_loss(
     bs, ps = R_pred.size(0), R_pred.size(1)
 
     Rps = R_pred.view(-1, 3, 3)
-    tps = t_pred.reshape(-1, 3)
-    cps = c_pred.reshape(-1, 1).squeeze(-1)
+    tps = t_pred.view(-1, 3)
+    cps = c_pred.view(-1, 1).squeeze(-1)
 
     ms = model.unsqueeze(1).repeat(1, ps, 1, 1).view(bs*ps, -1, 3)
     gt_transform = target.unsqueeze(1).repeat(1, ps, 1, 1).view(bs*ps, -1, 3)
@@ -83,34 +83,30 @@ class DenseFusionLoss(_Loss):
 
 def quat_to_rot(bquats: torch.Tensor, base=1e-15):
     """
-        bquats: Bs x 4 x Ps
+        bquats: Bs x Ps x 4
         base: avoids zero-div error w/ norms when converting to unit quaternion
 
         output: Bs x Ps x 3 x 3
     """
 
-    bs, ps = bquats.size(0), bquats.size(-1)
+    bs, ps = bquats.size(0), bquats.size(1)
 
-    bquats = bquats.transpose(2, 1)
     bquats += torch.tensor(base)
     bquats = bquats / torch.norm(bquats, dim=2).view(bs, ps, 1)
-    bquats = bquats.transpose(2, 1)
+    pred_r = bquats
 
-    r11 = 1 - 2*(bquats[:, 2]**2 + bquats[:, 3]**2)
-    r12 = 2*(bquats[:, 1]*bquats[:, 2] - bquats[:, 0]*bquats[:, 3])
-    r13 = 2*(bquats[:, 1]*bquats[:, 3] + bquats[:, 0]*bquats[:, 2])
+    R = torch.cat([
+        (1.0 - 2.0*(pred_r[:, :, 2]**2 + pred_r[:, :, 3]**2)).view(bs, ps, 1),
+        (2.0*pred_r[:, :, 1]*pred_r[:, :, 2] - 2.0*pred_r[:, :, 0]*pred_r[:, :, 3]).view(bs, ps, 1),
+        (2.0*pred_r[:, :, 0]*pred_r[:, :, 2] + 2.0*pred_r[:, :, 1]*pred_r[:, :, 3]).view(bs, ps, 1),
+        (2.0*pred_r[:, :, 1]*pred_r[:, :, 2] + 2.0*pred_r[:, :, 3]*pred_r[:, :, 0]).view(bs, ps, 1),
+        (1.0 - 2.0*(pred_r[:, :, 1]**2 + pred_r[:, :, 3]**2)).view(bs, ps, 1),
+        (-2.0*pred_r[:, :, 0]*pred_r[:, :, 1] + 2.0*pred_r[:, :, 2]*pred_r[:, :, 3]).view(bs, ps, 1),
+        (-2.0*pred_r[:, :, 0]*pred_r[:, :, 2] + 2.0*pred_r[:, :, 1]*pred_r[:, :, 3]).view(bs, ps, 1),
+        (2.0*pred_r[:, :, 0]*pred_r[:, :, 1] + 2.0*pred_r[:, :, 2]*pred_r[:, :, 3]).view(bs, ps, 1),
+        (1.0 - 2.0*(pred_r[:, :, 1]**2 + pred_r[:, :, 2]**2)).view(bs, ps, 1)
+    ], dim=2).contiguous().view(bs, ps, 3, 3).contiguous()
 
-    r21 = 2*(bquats[:, 1]*bquats[:, 2] + bquats[:, 0]*bquats[:, 3])
-    r22 = 1 - 2*(bquats[:, 1]**2 + bquats[:, 3]**2)
-    r23 = 2*(bquats[:, 2]*bquats[:, 3] - bquats[:, 0]*bquats[:, 1])
-
-    r31 = 2*(bquats[:, 1]*bquats[:, 3] - bquats[:, 0]*bquats[:, 2])
-    r32 = 2*(bquats[:, 2]*bquats[:, 3] + bquats[:, 0]*bquats[:, 1])
-    r33 = 1 - 2*(bquats[:, 1]**2 + bquats[:, 2]**2)
-
-    R = torch.stack([r11, r12, r13, r21, r22, r23, r31, r32, r33])
-    R = R.transpose(1, 0).transpose(2, 1)
-    R = R.view(bs, ps, 3, 3)
     return R
 
 

@@ -108,12 +108,11 @@ def train_step(
 
         # get predictions
         cloud = cloud.transpose(2, 1)
-        rgb = rgb.transpose(3, 2).transpose(2, 1)
+        rgb = torch.moveaxis(rgb, -1, 1)
         choose = choose.view(choose.size(0), -1)
         R_quat_pred, t_pred, c_pred = dfnet(cloud, rgb, choose, obj_idxs)
 
         R_pred = quat_to_rot(R_quat_pred)
-        t_pred = t_pred.transpose(2, 1)
 
         # calc loss
         loss = loss_fn(R_pred, t_pred, c_pred, model, target, obj_idxs).mean()
