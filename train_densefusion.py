@@ -41,9 +41,6 @@ def get_success_metrics(R_pred, t_pred, c_pred, R_gt, t_gt, obj_idxs):
         rresy.append(evaluation['rre_symmetry'])
         rre.append(evaluation['rre'])
         rte.append(evaluation['rte'])
-    print(rresy)
-    print(rre)
-    print(rte)
     return np.sum(s), np.sum(s_rre), np.sum(s_rte), np.mean(rresy), np.mean(rre), np.mean(rte)
 
 def handle_dirs(checkpoint_dir, pnet, optimizer, load_checkpoint=None, run_name=None):
