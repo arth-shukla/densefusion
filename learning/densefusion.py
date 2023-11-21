@@ -100,25 +100,25 @@ class DenseFuseNet(nn.Module):
         rx = F.relu(self.conv1_r(pix_wise_fuse))
         rx = F.relu(self.conv2_r(rx))
         rx = F.relu(self.conv3_r(rx))
-        rx = F.relu(self.conv4_r(rx))
+        rx = self.conv4_r(rx)
 
         tx = F.relu(self.conv1_t(pix_wise_fuse))
         tx = F.relu(self.conv2_t(tx))
         tx = F.relu(self.conv3_t(tx))
-        tx = F.relu(self.conv4_t(tx))
+        tx = self.conv4_t(tx)
 
         cx = F.relu(self.conv1_c(pix_wise_fuse))
         cx = F.relu(self.conv2_c(cx))
         cx = F.relu(self.conv3_c(cx))
-        cx = F.relu(self.conv4_c(cx))
+        cx = self.conv4_c(cx)
 
         rx = rx.view(batches, self.num_objs, 4, num_pts)
         tx = tx.view(batches, self.num_objs, 3, num_pts)
         cx = torch.sigmoid(cx).view(batches, self.num_objs, 1, num_pts)
 
-        rout = torch.stack([rx[b][obj_idx[b]] for b in range(obj_idx.size(0))]).squeeze(1).contiguous().transpose(2, 1).contiguous()
-        tout = torch.stack([tx[b][obj_idx[b]] for b in range(obj_idx.size(0))]).squeeze(1).contiguous().transpose(2, 1).contiguous()
-        cout = torch.stack([cx[b][obj_idx[b]] for b in range(obj_idx.size(0))]).squeeze(1).contiguous().transpose(2, 1).contiguous()
+        rout = torch.stack([torch.index_select(rx[b], 0, obj_idx[b]) for b in range(obj_idx.size(0))]).squeeze(1).contiguous().transpose(2, 1).contiguous()
+        tout = torch.stack([torch.index_select(tx[b], 0, obj_idx[b]) for b in range(obj_idx.size(0))]).squeeze(1).contiguous().transpose(2, 1).contiguous()
+        cout = torch.stack([torch.index_select(cx[b], 0, obj_idx[b]) for b in range(obj_idx.size(0))]).squeeze(1).contiguous().transpose(2, 1).contiguous()
 
         if ret_cemb:
             return rout, tout, cout, cemb.detach()
