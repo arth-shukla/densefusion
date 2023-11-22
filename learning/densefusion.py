@@ -88,8 +88,11 @@ class DenseFuseNet(nn.Module):
         batches, emb_ds = cemb.size(0), cemb.size(1)
         cemb = cemb.view(batches, emb_ds, -1)
 
-        cemb_keep = [cemb[b, :, torch.nonzero(choose[b])].squeeze(-1) for b in range(batches)]
+        cemb = cemb.transpose(2, 1)
+        cemb_keep = [cemb[b][torch.nonzero(choose[b])].squeeze(1) for b in range(batches)]
         cemb = pad_sequence(cemb_keep, batch_first=True, padding_value=0)
+        cemb = F.pad(cemb, (0, 0, 0, num_pts - cemb.size(1)), 'constant', 0)
+        cemb = cemb.transpose(2, 1)
 
         pix_wise_fuse = self.pointnet(pts, cemb)
 
