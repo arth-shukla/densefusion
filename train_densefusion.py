@@ -30,9 +30,9 @@ def get_success_metrics(R_pred, t_pred, c_pred, R_gt, t_gt, obj_idxs):
     for b in range(R_pred.shape[0]):
         evaluation = pose_evaluator.evaluate(
             IDX_TO_OBJ_NAMES[obj_idxs[b].item()],
-            R_pred[b][np.argmin(c_pred[b].squeeze())],
+            R_pred[b][np.argmax(c_pred[b].squeeze())],
             R_gt[b],
-            t_pred[b][np.argmin(c_pred[b].squeeze())],
+            t_pred[b][np.argmax(c_pred[b].squeeze())],
             t_gt[b],
         )
         s.append(evaluation['rre_symmetry'] <= 5 and evaluation['rte'] <= 0.01)

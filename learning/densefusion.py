@@ -100,17 +100,17 @@ class DenseFuseNet(nn.Module):
         rx = F.relu(self.conv1_r(pix_wise_fuse))
         rx = F.relu(self.conv2_r(rx))
         rx = F.relu(self.conv3_r(rx))
-        rx = F.relu(self.conv4_r(rx))
+        rx = self.conv4_r(rx)
 
         tx = F.relu(self.conv1_t(pix_wise_fuse))
         tx = F.relu(self.conv2_t(tx))
         tx = F.relu(self.conv3_t(tx))
-        tx = F.relu(self.conv4_t(tx))
+        tx = self.conv4_t(tx)
 
         cx = F.relu(self.conv1_c(pix_wise_fuse))
         cx = F.relu(self.conv2_c(cx))
         cx = F.relu(self.conv3_c(cx))
-        cx = F.relu(self.conv4_c(cx))
+        cx = self.conv4_c(cx)
 
         rx = rx.view(batches, self.num_objs, 4, num_pts)
         tx = tx.view(batches, self.num_objs, 3, num_pts)
