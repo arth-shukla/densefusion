@@ -139,6 +139,11 @@ def process_raw_data(output_dir = 'processed_data'):
             for obj_id, obj_name in zip(meta['object_ids'], meta['object_names']):
                 mask = (label.copy() == obj_id)
 
+                rmin, rmax, cmin, cmax = get_bbox(mask_to_bbox(mask))
+                mask_zeroed = np.zeros_like(mask)
+                mask_zeroed[rmin:rmax, cmin:cmax] = mask[rmin:rmax, cmin:cmax]
+                mask = mask_zeroed.copy()
+
                 keep_ms, keep_ns = np.nonzero(mask > 0)
                 if len(keep_ms) > max_ptcld_len:
                     keep_idxs = random.sample(list(range(len(keep_ms))), max_ptcld_len)
@@ -155,7 +160,6 @@ def process_raw_data(output_dir = 'processed_data'):
                 if len(pts) < min_ptcld_len:
                     continue
 
-                rmin, rmax, cmin, cmax = get_bbox(mask_to_bbox(mask))
                 color_masked = color.copy() * mask.reshape(*mask.shape, 1)
                 cropped_img = color_masked[rmin:rmax, cmin:cmax]
                 choose = choose[rmin:rmax, cmin:cmax]
@@ -224,4 +228,4 @@ def process_raw_data(output_dir = 'processed_data'):
     process_raw_obs_data(raw_train_obj_dir, train_scene_names, processed_train_dir, processed_models_dir)
 
 if __name__ == '__main__':
-    process_raw_data(output_dir='processed_like_df_2')
+    process_raw_data(output_dir='processed_data')

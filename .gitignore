@@ -185,3 +185,7 @@ processed_like_df_2/
 processed_like_df_2.tar.gz
 processed_occlusions/
 processed_occlusions.tar.gz
+processed_data/
+processed_data.tar.gz
+processed_occlusions_2/
+processed_occlusions_2.tar.gz
