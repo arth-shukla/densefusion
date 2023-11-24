@@ -170,6 +170,9 @@ def train(
     # make checkpoint dir and load checkpoints
     cdir, pnet, optimizer = handle_dirs(checkpoint_dir, pnet, optimizer, load_checkpoint=load_checkpoint, run_name=run_name)
 
+    for g in optimizer.param_groups:
+        g['lr'] = lr
+
     print('w', loss_fn.module.w)
     print('opt', optimizer.state_dict())
 
