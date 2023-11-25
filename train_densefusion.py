@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 from learning.loss import quat_to_rot, DenseFusionLoss
+from learning.loss_batch import DenseFusionLossBatch
 from learning.densefusion import DenseFuseNet
 from learning.utils import compute_rre, compute_rte, OBJ_NAMES, OBJ_NAMES_TO_IDX, IDX_TO_OBJ_NAMES
 from benchmark_utils.pose_evaluator import PoseEvaluator
@@ -80,7 +81,6 @@ def load_model(model, optimizer, load_path, device=torch.device('cpu')):
 
 def train_step(
         dfnet, dl, optimizer, loss_fn,
-        batch_size=16,
         train=True,
         device=torch.device('cpu'), epoch=0,
         print_batch_metrics=False
@@ -91,6 +91,7 @@ def train_step(
     tot_s_rre, tot_s_rte = 0, 0
     step_loss = 0
     for iter_num, (cloud, rgb, model, choose, target, obj_idxs, pose) in enumerate(iter(dl)):
+        batch_size = cloud.size(0)
         num_data_points += batch_size
 
         cloud = cloud.to(device).float()
@@ -204,7 +205,6 @@ def train(
 
         train_accuracy, train_rre_acc, train_rte_acc, train_loss, train_rre_sym, train_rre, train_rte = train_step(
             pnet.train(), train_dl, optimizer, loss_fn,
-            batch_size=batch_size,
             train=True,
             device=device, epoch=epoch,
             print_batch_metrics=print_batch_metrics
@@ -218,7 +218,6 @@ def train(
             with torch.no_grad():
                 val_accuracy, val_rre_acc, val_rte_acc, val_loss, val_rre_sym, val_rre, val_rte = train_step(
                     pnet.eval(), val_dl, optimizer, loss_fn,
-                    batch_size=batch_size,
                     train=False,
                     device=device, epoch=epoch,
                     print_batch_metrics=print_batch_metrics
@@ -346,7 +345,7 @@ if __name__ == '__main__':
     print(args)
 
     run_training(
-        DenseFuseNet, torch.nn.DataParallel(DenseFusionLoss(inf_sim=inf_sim, n_sim=n_sim, sym_rots=sym_rots, w=args.loss_w, reduction='mean')),
+        DenseFuseNet, torch.nn.DataParallel(DenseFusionLossBatch(inf_sim=inf_sim, n_sim=n_sim, sym_rots=sym_rots, w=args.loss_w, reduction='mean')),
         batch_size = args.batches,
         epochs = args.epochs,
         lr = args.lr,
