@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 from learning.loss import quat_to_rot, DenseFusionLoss
+from learning.loss_batch import DenseFusionLossBatch
 from learning.densefusion import DenseFuseNet
 from learning.utils import compute_rre, compute_rte, OBJ_NAMES, OBJ_NAMES_TO_IDX, IDX_TO_OBJ_NAMES
 from benchmark_utils.pose_evaluator import PoseEvaluator
@@ -346,7 +347,7 @@ if __name__ == '__main__':
     print(args)
 
     run_training(
-        DenseFuseNet, torch.nn.DataParallel(DenseFusionLoss(inf_sim=inf_sim, n_sim=n_sim, sym_rots=sym_rots, w=args.loss_w, reduction='mean')),
+        DenseFuseNet, torch.nn.DataParallel(DenseFusionLossBatch(inf_sim=inf_sim, n_sim=n_sim, sym_rots=sym_rots, w=args.loss_w, reduction='mean')),
         batch_size = args.batches,
         epochs = args.epochs,
         lr = args.lr,
