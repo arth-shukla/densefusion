@@ -269,6 +269,7 @@ def run_training(
         data_dir = 'processed_data_new',
         add_train_noise = False,
         occlusion_data_dir = None,
+        dl_workers = 0,
     ):
 
     from learning.load import PoseDataset, pad_train
@@ -283,8 +284,8 @@ def run_training(
     else:
         train_ds = PoseDataset(data_dir=data_dir / 'train', cloud=True, rgb=True, model=True, choose=True, target=True, add_noise=add_train_noise)
     val_ds = PoseDataset(data_dir=data_dir / 'val', cloud=True, rgb=True, model=True, choose=True, target=True)
-    train_dl = DataLoader(train_ds, batch_size=batch_size, shuffle=True, collate_fn=pad_train, num_workers=0)
-    val_dl = DataLoader(val_ds, batch_size=batch_size, shuffle=True, collate_fn=pad_train, num_workers=0)
+    train_dl = DataLoader(train_ds, batch_size=batch_size, shuffle=True, collate_fn=pad_train, num_workers=dl_workers)
+    val_dl = DataLoader(val_ds, batch_size=batch_size, shuffle=True, collate_fn=pad_train, num_workers=dl_workers)
 
     trained_dfnet = train(
         model_cls, loss_fn,
@@ -339,6 +340,7 @@ if __name__ == '__main__':
     parser.add_argument('-d', '--data_dir', type=str, default='processed_like_df')
     parser.add_argument('--add_train_noise', action='store_true')
     parser.add_argument('--occlusion_data_dir', default=None)
+    parser.add_argument('--dl_workers', type=int, default=0)
 
     args = parser.parse_args()
 
@@ -359,4 +361,5 @@ if __name__ == '__main__':
         data_dir = args.data_dir,
         add_train_noise = args.add_train_noise,
         occlusion_data_dir = args.occlusion_data_dir,
+        dl_workers = args.dl_workers,
     )
