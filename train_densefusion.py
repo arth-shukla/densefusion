@@ -150,7 +150,8 @@ def train(
         checkpoint_dir='checkpoints', load_checkpoint=None,
         wandb_logs=False, print_batch_metrics=False,
         run_name=None,
-        data_dir = 'processed_data_new'
+        data_dir = 'processed_data_new',
+        do_decay = False
     ):
     # get device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -195,10 +196,10 @@ def train(
     for epoch in range(epochs):
 
         
-        # if True: #decay:
-        #     lr = lr * LR_RATE
-        #     loss_fn.module.w = loss_fn.module.w * W_RATE
-        #     optimizer = torch.optim.Adam(pnet.parameters(), lr=lr)
+        if do_decay:
+            lr = lr * LR_RATE
+            loss_fn.module.w = loss_fn.module.w * W_RATE
+            optimizer = torch.optim.Adam(pnet.parameters(), lr=lr)
 
 
         print(f'Starting epoch {epoch}...')
@@ -270,6 +271,7 @@ def run_training(
         add_train_noise = False,
         occlusion_data_dir = None,
         dl_workers = 0,
+        do_decay = False,
     ):
 
     from learning.load import PoseDataset, pad_train
@@ -301,6 +303,7 @@ def run_training(
         print_batch_metrics=print_batch_metrics,
         run_name=run_name,
         data_dir=data_dir,
+        do_decay=do_decay,
     )
 
 if __name__ == '__main__':
@@ -341,6 +344,7 @@ if __name__ == '__main__':
     parser.add_argument('--add_train_noise', action='store_true')
     parser.add_argument('--occlusion_data_dir', default=None)
     parser.add_argument('--dl_workers', type=int, default=0)
+    parser.add_argument('--decay', action='store_true')
 
     args = parser.parse_args()
 
@@ -362,4 +366,5 @@ if __name__ == '__main__':
         add_train_noise = args.add_train_noise,
         occlusion_data_dir = args.occlusion_data_dir,
         dl_workers = args.dl_workers,
+        do_decay = args.decay,
     )
