@@ -36,7 +36,7 @@ def densefusion_loss_batch(
     ):
     inf_sim_bidxs, n_sim_bidxs, no_sim_bidxs = [], [], []
 
-    for x in range(obj_idx.size(0)):
+    for x in obj_idx.squeeze(-1).tolist():
         if x in inf_sim:
             inf_sim_bidxs.append(x)
         elif x in n_sim:
