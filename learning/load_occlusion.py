@@ -62,7 +62,7 @@ class PoseOcclusionDataset(Dataset):
         n_successful_occlusions = 0
         mask_len = np.sum(mask)
         if mask_len > 200:
-            while True:
+            for _ in range(100):
                 scene_mask = np.load(self.scene_mask_dir / f'{random.randint(0, self.n_scene_masks-1)}_scene_mask.npy').astype(np.int8)
                 new_mask = mask * (-scene_mask + 1)
                 new_mask_len = np.sum(new_mask)

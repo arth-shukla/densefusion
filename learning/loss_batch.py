@@ -36,13 +36,13 @@ def densefusion_loss_batch(
     ):
     inf_sim_bidxs, n_sim_bidxs, no_sim_bidxs = [], [], []
 
-    for x in range(obj_idx.size(0)):
+    for i, x in enumerate(obj_idx.squeeze(-1).tolist()):
         if x in inf_sim:
-            inf_sim_bidxs.append(x)
+            inf_sim_bidxs.append(i)
         elif x in n_sim:
-            n_sim_bidxs.append(x)
+            n_sim_bidxs.append(i)
         else:
-            no_sim_bidxs.append(x)
+            no_sim_bidxs.append(i)
 
 
     inf_sim_loss, n_sim_loss, no_sim_loss = 0, 0, 0
@@ -187,6 +187,8 @@ def min_of_n_loss(
         curr_split_losses = torch.mean(curr_split, dim=1)
         curr_split_loss = torch.min(curr_split_losses)
         final_losses.append(curr_split_loss)
+
+        prev = curr
 
     final_losses = torch.stack(final_losses)
     return final_losses.mean()
