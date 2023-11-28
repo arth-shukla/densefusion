@@ -36,13 +36,13 @@ def densefusion_loss_batch(
     ):
     inf_sim_bidxs, n_sim_bidxs, no_sim_bidxs = [], [], []
 
-    for x in obj_idx.squeeze(-1).tolist():
+    for i, x in enumerate(obj_idx.squeeze(-1).tolist()):
         if x in inf_sim:
-            inf_sim_bidxs.append(x)
+            inf_sim_bidxs.append(i)
         elif x in n_sim:
-            n_sim_bidxs.append(x)
+            n_sim_bidxs.append(i)
         else:
-            no_sim_bidxs.append(x)
+            no_sim_bidxs.append(i)
 
 
     inf_sim_loss, n_sim_loss, no_sim_loss = 0, 0, 0
