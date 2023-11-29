@@ -188,6 +188,8 @@ def min_of_n_loss(
         curr_split_loss = torch.min(curr_split_losses)
         final_losses.append(curr_split_loss)
 
+        prev = curr
+
     final_losses = torch.stack(final_losses)
     return final_losses.mean()
 
