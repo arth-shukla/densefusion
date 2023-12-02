@@ -115,7 +115,7 @@ def train(
 
     # init segnet
     segnet = model_cls().to(device)
-    # segnet = torch.nn.parallel.DataParallel(segnet, device_ids=list(range(torch.cuda.device_count())), dim=0)
+    segnet = torch.nn.parallel.DataParallel(segnet, device_ids=list(range(torch.cuda.device_count())), dim=0)
 
     optimizer = torch.optim.Adam(segnet.parameters(), lr=lr)
 
