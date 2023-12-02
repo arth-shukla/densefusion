@@ -189,3 +189,7 @@ processed_data/
 processed_data.tar.gz
 processed_occlusions_2/
 processed_occlusions_2.tar.gz
+
+raw_data_all/
+processed_segnet_data/
+processed_segnet_data.tar.gz
