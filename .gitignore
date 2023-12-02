@@ -193,3 +193,8 @@ processed_occlusions_2.tar.gz
 raw_data_all/
 processed_segnet_data/
 processed_segnet_data.tar.gz
+
+processed_data_unet/
+processed_data_unet.tar.gz
+processed_occlusions_unet
+processed_occlusions_unet.tar.gz

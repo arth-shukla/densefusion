@@ -1,6 +1,7 @@
 import torch
 import torch.nn.functional as F
 from segnet.segnet import SegNet
+from segnet.unet import get_unet_cls
 import numpy as np
 
 import wandb
@@ -237,13 +238,22 @@ if __name__ == '__main__':
     parser.add_argument('--data_dir', type=str, default='processed_segnet_data')
     parser.add_argument('--add_train_noise', action='store_true')
     parser.add_argument('--dl_workers', type=int, default=0)
+    parser.add_argument('--network', type=str, default='unet')
+    parser.add_argument('--bilinear', action='store_true')
 
     args = parser.parse_args()
 
     print(args)
 
+    if args.network == 'unet':
+        args_model_cls = get_unet_cls(bilinear=args.bilinear)
+    elif args.network == 'segnet':
+        args_model_cls = SegNet
+    else:
+        raise NotImplementedError('Valid model options are `unet` and `segnet`')
+
     run_training(
-        SegNet, F.cross_entropy,
+        args_model_cls, F.cross_entropy,
         batch_size = args.batches,
         epochs = args.epochs,
         lr = args.lr,
