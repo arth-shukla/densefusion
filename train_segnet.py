@@ -93,7 +93,7 @@ def train_step(
     step_acc = num_correct / num_pix
     print(f'epoch: {epoch}\t{print_pref}_acc: {step_acc}\t{print_pref}_loss: {step_loss}')
     
-    return step_loss
+    return step_acc, step_loss
 
 def train(
         model_cls, loss_fn,
@@ -144,7 +144,7 @@ def train(
 
         print(f'Starting epoch {epoch}...')
 
-        train_loss = train_step(
+        train_acc, train_loss = train_step(
             segnet.train(), train_dl, optimizer, loss_fn,
             train=True,
             device=device, epoch=epoch,
@@ -156,7 +156,7 @@ def train(
 
         if epoch % run_val_every == 0 and run_val_every > 0:
             with torch.no_grad():
-                val_loss = train_step(
+                val_acc, val_loss = train_step(
                     segnet.eval(), val_dl, optimizer, loss_fn,
                     train=False,
                     device=device, epoch=epoch,
@@ -165,9 +165,11 @@ def train(
 
             if wandb_logs:
                 wandb_log['val/val_loss'] = val_loss
+                wandb_log['val/val_acc'] = val_acc
 
         if wandb_logs:
             wandb_log['train/train_loss'] = train_loss
+            wandb_log['train/train_acc'] = train_acc
             run.log(wandb_log)
 
         save_model(segnet, optimizer, save_path=cdir / f'epoch_{epoch}.pt')
