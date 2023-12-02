@@ -222,11 +222,11 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('-b', '--batches', type=int, default=16)
+    parser.add_argument('-b', '--batches', type=int, default=1)
     parser.add_argument('-e', '--epochs', type=int, default=1000)
     parser.add_argument('--lr', type=float, default=0.0001)
     parser.add_argument('--acc_req', type=float, default=0.95)
-    parser.add_argument('--val_every', type=int, default=3)
+    parser.add_argument('--val_every', type=int, default=1)
     parser.add_argument('--checkpoint_dir', type=str, default='checkpoints/segnet')
     parser.add_argument('--load_checkpoint', default=None)
     parser.add_argument('--wandb', action='store_true')
