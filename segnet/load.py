@@ -36,7 +36,6 @@ class SegmentationDataset(Dataset):
         if self.add_noise:
             rgb_pil = Image.fromarray(np.uint8(rgb * 255)).convert('RGB')
             rgb = np.array(self.img_noise(rgb_pil)) / 255
-            print(rgb)
 
         label = np.load(self.data_dir / f'{index}_label.npy')
 
