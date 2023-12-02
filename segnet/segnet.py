@@ -1,10 +1,9 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from learning.utils import OBJ_NAMES
 
 class SegNet(nn.Module):
-    def __init__(self, in_chn=3, out_chn=len(OBJ_NAMES), bn_momentum=0.1):
+    def __init__(self, in_chn=3, out_chn=82, bn_momentum=0.1):
         super().__init__()
 
         self.e_conv11 = nn.Conv2d(in_chn, 64, kernel_size=3, padding=1)
