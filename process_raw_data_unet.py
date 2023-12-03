@@ -230,27 +230,27 @@ def process_raw_data(output_dir = 'processed_data'):
     processed_test_dir = processed_data_dir / 'test'
     processed_models_dir = processed_data_dir / 'models'
 
-    # print('Farthest point sampling model pointclouds...')
-    # os.makedirs(processed_models_dir, exist_ok=True)
-    # for obj in tqdm(os.listdir(raw_models_dir)):
-    #     if str(obj) == '.gitignore': continue
-    #     model = trimesh.load(raw_models_dir / obj / 'visual_meshes/visual.dae', force='mesh')
-    #     pts, _ = trimesh.sample.sample_surface(model, 10000, seed=0)
-    #     pts = fp_sampling(pts, num_samples=1000)
+    print('Farthest point sampling model pointclouds...')
+    os.makedirs(processed_models_dir, exist_ok=True)
+    for obj in tqdm(os.listdir(raw_models_dir)):
+        if str(obj) == '.gitignore': continue
+        model = trimesh.load(raw_models_dir / obj / 'visual_meshes/visual.dae', force='mesh')
+        pts, _ = trimesh.sample.sample_surface(model, 10000, seed=0)
+        pts = fp_sampling(pts, num_samples=1000)
 
-    #     pcd = o3d.geometry.PointCloud()
-    #     pcd.points = o3d.utility.Vector3dVector(pts)
-    #     o3d.io.write_point_cloud(str(processed_models_dir / f'{obj}.pcd'), pcd)
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(pts)
+        o3d.io.write_point_cloud(str(processed_models_dir / f'{obj}.pcd'), pcd)
 
     train_scene_names = get_stripped_lines(raw_train_splits_dir / 'train.txt')
     val_scene_names = get_stripped_lines(raw_train_splits_dir / 'val.txt')
     test_scene_names = get_stripped_lines(raw_test_dir / 'test.txt', test=True)
 
     with torch.no_grad():
-        # print('Processing test data...')
-        # process_raw_obs_data(raw_test_obj_dir, test_scene_names, processed_test_dir, processed_models_dir, test=True, min_ptcld_len=-np.inf)
-        # print('Processing val data...')
-        # process_raw_obs_data(raw_train_obj_dir, val_scene_names, processed_val_dir, processed_models_dir)
+        print('Processing test data...')
+        process_raw_obs_data(raw_test_obj_dir, test_scene_names, processed_test_dir, processed_models_dir, test=True, min_ptcld_len=-np.inf)
+        print('Processing val data...')
+        process_raw_obs_data(raw_train_obj_dir, val_scene_names, processed_val_dir, processed_models_dir)
         print('Processing train data...')
         process_raw_obs_data(raw_train_obj_dir, train_scene_names, processed_train_dir, processed_models_dir)
 

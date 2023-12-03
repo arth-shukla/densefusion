@@ -217,17 +217,17 @@ def process_raw_data(output_dir = 'processed_data'):
     processed_test_dir = processed_data_dir / 'test'
     processed_models_dir = processed_data_dir / 'models'
 
-    # print('Farthest point sampling model pointclouds...')
-    # os.makedirs(processed_models_dir, exist_ok=True)
-    # for obj in tqdm(os.listdir(raw_models_dir)):
-    #     if str(obj) == '.gitignore': continue
-    #     model = trimesh.load(raw_models_dir / obj / 'visual_meshes/visual.dae', force='mesh')
-    #     pts, _ = trimesh.sample.sample_surface(model, 10000, seed=0)
-    #     pts = fp_sampling(pts, num_samples=1000)
+    print('Farthest point sampling model pointclouds...')
+    os.makedirs(processed_models_dir, exist_ok=True)
+    for obj in tqdm(os.listdir(raw_models_dir)):
+        if str(obj) == '.gitignore': continue
+        model = trimesh.load(raw_models_dir / obj / 'visual_meshes/visual.dae', force='mesh')
+        pts, _ = trimesh.sample.sample_surface(model, 10000, seed=0)
+        pts = fp_sampling(pts, num_samples=1000)
 
-    #     pcd = o3d.geometry.PointCloud()
-    #     pcd.points = o3d.utility.Vector3dVector(pts)
-    #     o3d.io.write_point_cloud(str(processed_models_dir / f'{obj}.pcd'), pcd)
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(pts)
+        o3d.io.write_point_cloud(str(processed_models_dir / f'{obj}.pcd'), pcd)
 
     train_scene_names = get_stripped_lines(raw_train_splits_dir / 'train.txt')
     val_scene_names = get_stripped_lines(raw_train_splits_dir / 'val.txt')
