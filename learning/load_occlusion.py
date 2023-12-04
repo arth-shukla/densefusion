@@ -17,7 +17,7 @@ class PoseOcclusionDataset(Dataset):
             data_dir: Union[str, Path],
             train=True,
             cloud=False, cloud_rgb=False, rgb=False, model=False, choose=False, target=False,
-            image_base_size=(240, 240),
+            image_base_size=(280, 280),
             add_noise=False,
             transform=torch.from_numpy,
             max_ptcld_len=1000,
