@@ -73,8 +73,20 @@ def save_model(model, optimizer, save_path):
         optimizer=optimizer.state_dict(),
     ), save_path)
 
-def load_model(model, optimizer, load_path, device=torch.device('cpu')):
+def load_model(model, optimizer, load_path, device=torch.device('cpu'), compatibility=True):
     checkpoint = torch.load(load_path, map_location=device)
+    if compatibility:
+        for key, num in [
+            ('module.conv4_r.weight', 4), ('module.conv4_r.bias', 4),
+            ('module.conv4_t.weight', 3), ('module.conv4_t.bias', 3),
+            ('module.conv4_c.weight', 1), ('module.conv4_c.bias', 1)
+        ]:
+            given = checkpoint['model'][key]
+            desired0dim = len(OBJ_NAMES) * num
+            needed_dim = desired0dim - given.size(0)
+            needed = torch.zeros(needed_dim, *given.shape[1:]).to(device)
+            final = torch.cat([given, needed], 0)
+            checkpoint['model'][key] = final
     model.load_state_dict(checkpoint['model'])
     optimizer.load_state_dict(checkpoint['optimizer'])
     return model, optimizer
