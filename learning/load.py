@@ -16,7 +16,7 @@ class PoseDataset(Dataset):
             data_dir: Union[str, Path],
             train=True,
             cloud=False, cloud_rgb=False, rgb=False, model=False, choose=False, target=False,
-            image_base_size=(240, 240),
+            image_base_size=(280, 280),
             add_noise=False,
             transform=torch.from_numpy,
         ):
@@ -74,7 +74,8 @@ class PoseDataset(Dataset):
                 target += add_t
             rets.append(target)
         # obj_idx required for any model to work
-        meta = pickle.load(open(self.data_dir / f'{index}_meta.pkl', 'rb'))
+        with open(self.data_dir / f'{index}_meta.pkl', 'rb') as metaf:
+            meta = pickle.load(metaf)
         rets.append(np.array([OBJ_NAMES_TO_IDX[meta['obj_name']]]))
         if self.train:
             pose = np.load(self.data_dir / f'{index}_pose.npy')
