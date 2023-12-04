@@ -88,7 +88,7 @@ def load_model(model, optimizer, load_path, device=torch.device('cpu'), compatib
             final = torch.cat([given, needed], 0)
             checkpoint['model'][key] = final
     model.load_state_dict(checkpoint['model'])
-    optimizer.load_state_dict(checkpoint['optimizer'])
+    # optimizer.load_state_dict(checkpoint['optimizer'])
     return model, optimizer
 
 def train_step(
