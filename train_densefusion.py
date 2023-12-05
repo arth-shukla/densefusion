@@ -73,7 +73,7 @@ def save_model(model, optimizer, save_path):
         optimizer=optimizer.state_dict(),
     ), save_path)
 
-def load_model(model, optimizer, load_path, device=torch.device('cpu'), compatibility=True):
+def load_model(model, optimizer, load_path, device=torch.device('cpu'), compatibility=False):
     checkpoint = torch.load(load_path, map_location=device)
     if compatibility:
         for key, num in [
@@ -88,7 +88,7 @@ def load_model(model, optimizer, load_path, device=torch.device('cpu'), compatib
             final = torch.cat([given, needed], 0)
             checkpoint['model'][key] = final
     model.load_state_dict(checkpoint['model'])
-    # optimizer.load_state_dict(checkpoint['optimizer'])
+    optimizer.load_state_dict(checkpoint['optimizer'])
     return model, optimizer
 
 def train_step(
