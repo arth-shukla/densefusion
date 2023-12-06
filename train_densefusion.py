@@ -163,7 +163,8 @@ def train(
         wandb_logs=False, print_batch_metrics=False,
         run_name=None,
         data_dir = 'processed_data_new',
-        do_decay = False
+        do_decay = False,
+        min_over_cham_prob = 0.1,
     ):
     # get device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -201,6 +202,7 @@ def train(
                 acc_req=acc_req,
                 run_val_every=run_val_every,
                 n_gpu=torch.cuda.device_count(),
+                min_over_cham_prob=min_over_cham_prob,
             )
         )
 
@@ -284,6 +286,7 @@ def run_training(
         occlusion_data_dir = None,
         dl_workers = 0,
         do_decay = False,
+        min_over_cham_prob = 0.1,
     ):
 
     from learning.load import PoseDataset, pad_train
@@ -316,6 +319,7 @@ def run_training(
         run_name=run_name,
         data_dir=data_dir,
         do_decay=do_decay,
+        min_over_cham_prob=min_over_cham_prob,
     )
 
 if __name__ == '__main__':
@@ -357,13 +361,17 @@ if __name__ == '__main__':
     parser.add_argument('--occlusion_data_dir', default=None)
     parser.add_argument('--dl_workers', type=int, default=0)
     parser.add_argument('--decay', action='store_true')
+    parser.add_argument('--min_over_cham_prob', type=float, default=0.1)
 
     args = parser.parse_args()
 
     print(args)
 
     run_training(
-        DenseFuseNet, torch.nn.DataParallel(DenseFusionLossBatch(inf_sim=inf_sim, n_sim=n_sim, sym_rots=sym_rots, w=args.loss_w, reduction='mean')),
+        DenseFuseNet, torch.nn.DataParallel(DenseFusionLossBatch(
+            inf_sim=inf_sim, n_sim=n_sim, sym_rots=sym_rots, w=args.loss_w, reduction='mean',
+            min_over_cham_prob=args.min_over_cham_prob,
+        )),
         batch_size = args.batches,
         epochs = args.epochs,
         lr = args.lr,
@@ -379,4 +387,5 @@ if __name__ == '__main__':
         occlusion_data_dir = args.occlusion_data_dir,
         dl_workers = args.dl_workers,
         do_decay = args.decay,
+        min_over_cham_prob = args.min_over_cham_prob,
     )
