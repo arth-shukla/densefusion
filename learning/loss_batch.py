@@ -4,13 +4,14 @@ import numpy as np
 
 class DenseFusionLossBatch(_Loss):
 
-    def __init__(self, inf_sim=[], n_sim=[], sym_rots=dict(), w=0.015, reduction='mean'):
+    def __init__(self, inf_sim=[], n_sim=[], sym_rots=dict(), w=0.015, reduction='mean', min_over_cham_prob=0.1):
         super().__init__()
         self.inf_sim = inf_sim
         self.n_sim = n_sim
         self.sym_rots = sym_rots
         self.w = w
         self.reduction = reduction
+        self.min_over_cham_prob = min_over_cham_prob
 
     def forward(
             self,
@@ -24,7 +25,8 @@ class DenseFusionLossBatch(_Loss):
             inf_sim=self.inf_sim,
             n_sim=self.n_sim,
             sym_rots=self.sym_rots,
-            w=self.w, reduction=self.reduction
+            w=self.w, reduction=self.reduction,
+            min_over_cham_prob = self.min_over_cham_prob,
         )
 
 def densefusion_loss_batch(
