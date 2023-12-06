@@ -1,5 +1,6 @@
 import torch
 from torch.nn.modules.loss import _Loss
+import numpy as np
 
 class DenseFusionLossBatch(_Loss):
 
@@ -33,6 +34,7 @@ def densefusion_loss_batch(
         n_sim=[],
         sym_rots=dict(),
         w=0.015, reduction='mean',
+        min_over_cham_prob=0.1,
     ):
     inf_sim_bidxs, n_sim_bidxs, no_sim_bidxs = [], [], []
 
@@ -47,14 +49,26 @@ def densefusion_loss_batch(
 
     inf_sim_loss, n_sim_loss, no_sim_loss = 0, 0, 0
     if len(inf_sim_bidxs) > 0:
-        inf_sim_loss = cham_loss(
-            R_pred[inf_sim_bidxs],
-            t_pred[inf_sim_bidxs],
-            c_pred[inf_sim_bidxs],
-            model[inf_sim_bidxs],
-            target[inf_sim_bidxs],
-            w=w, reduction=reduction,
-        )
+        if np.random.rand() < min_over_cham_prob:
+            inf_sim_loss = min_of_n_loss(
+                R_pred[inf_sim_bidxs],
+                t_pred[inf_sim_bidxs],
+                c_pred[inf_sim_bidxs],
+                model[inf_sim_bidxs],
+                target[inf_sim_bidxs],
+                obj_idx[inf_sim_bidxs],
+                sym_rots=sym_rots,
+                w=w, reduction=reduction,
+            )
+        else:
+            inf_sim_loss = cham_loss(
+                R_pred[inf_sim_bidxs],
+                t_pred[inf_sim_bidxs],
+                c_pred[inf_sim_bidxs],
+                model[inf_sim_bidxs],
+                target[inf_sim_bidxs],
+                w=w, reduction=reduction,
+            )
     if len(n_sim_bidxs) > 0:
         n_sim_loss = min_of_n_loss(
             R_pred[n_sim_bidxs],

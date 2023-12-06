@@ -357,13 +357,17 @@ if __name__ == '__main__':
     parser.add_argument('--occlusion_data_dir', default=None)
     parser.add_argument('--dl_workers', type=int, default=0)
     parser.add_argument('--decay', action='store_true')
+    parser.add_argument('--min_over_cham_prob', type=float, default=0.1)
 
     args = parser.parse_args()
 
     print(args)
 
     run_training(
-        DenseFuseNet, torch.nn.DataParallel(DenseFusionLossBatch(inf_sim=inf_sim, n_sim=n_sim, sym_rots=sym_rots, w=args.loss_w, reduction='mean')),
+        DenseFuseNet, torch.nn.DataParallel(DenseFusionLossBatch(
+            inf_sim=inf_sim, n_sim=n_sim, sym_rots=sym_rots, w=args.loss_w, reduction='mean',
+            min_over_cham_prob=args.min_over_cham_prob,
+        )),
         batch_size = args.batches,
         epochs = args.epochs,
         lr = args.lr,
