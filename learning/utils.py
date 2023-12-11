@@ -1,4 +1,5 @@
 import numpy as np
+import cv2
 
 def compute_rre(R_est: np.ndarray, R_gt: np.ndarray):
     """Compute the relative rotation error (geodesic distance of rotation)."""
@@ -28,3 +29,62 @@ OBJ_NAMES = OBJ_NAMES_12 + ['bowl_a', 'plate', 'pan_tefal', 'bowl']
 OBJ_NAMES_TO_IDX = OBJ_NAMES_TO_IDX_12 | {'bowl_a': 23, 'plate': 24, 'pan_tefal': 25, 'bowl': 26}
 
 IDX_TO_OBJ_NAMES = dict((v,k) for k,v in OBJ_NAMES_TO_IDX.items())
+
+def mask_to_bbox(mask):
+    mask = mask.astype(np.uint8)
+    contours, _ = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    x, y, w, h = 0, 0, 0, 0
+    for contour in contours:
+        tmp_x, tmp_y, tmp_w, tmp_h = cv2.boundingRect(contour)
+        if tmp_w * tmp_h > w * h:
+            x, y, w, h = tmp_x, tmp_y, tmp_w, tmp_h
+    return [x, y, w, h]
+
+def get_bbox(bbox):
+    img_width = 720
+    img_length = 1280
+    step = 40
+    border_list = [-1] + np.arange(step, img_width+step+step, step=step).tolist()
+
+    bbx = [bbox[1], bbox[1] + bbox[3], bbox[0], bbox[0] + bbox[2]]
+    if bbx[0] < 0:
+        bbx[0] = 0
+    if bbx[1] >= img_width:
+        bbx[1] = img_width-1
+    if bbx[2] < 0:
+        bbx[2] = 0
+    if bbx[3] >= img_length:
+        bbx[3] = img_length-1                
+    rmin, rmax, cmin, cmax = bbx[0], bbx[1], bbx[2], bbx[3]
+    r_b = rmax - rmin
+    for tt in range(len(border_list)):
+        if r_b > border_list[tt] and r_b < border_list[tt + 1]:
+            r_b = border_list[tt + 1]
+            break
+    c_b = cmax - cmin
+    for tt in range(len(border_list)):
+        if c_b > border_list[tt] and c_b < border_list[tt + 1]:
+            c_b = border_list[tt + 1]
+            break
+    center = [int((rmin + rmax) / 2), int((cmin + cmax) / 2)]
+    rmin = center[0] - int(r_b / 2)
+    rmax = center[0] + int(r_b / 2)
+    cmin = center[1] - int(c_b / 2)
+    cmax = center[1] + int(c_b / 2)
+    if rmin < 0:
+        delt = -rmin
+        rmin = 0
+        rmax += delt
+    if cmin < 0:
+        delt = -cmin
+        cmin = 0
+        cmax += delt
+    if rmax > img_width:
+        delt = rmax - img_width
+        rmax = img_width
+        rmin -= delt
+    if cmax > img_length:
+        delt = cmax - img_length
+        cmax = img_length
+        cmin -= delt
+    return rmin, rmax, cmin, cmax

@@ -1,24 +1,16 @@
-import argparse
-from typing import Optional
-import torch
-import torch.nn as nn
-import numpy as np
-from learning.loss import quat_to_rot, DenseFusionLoss
-from learning.loss_batch import DenseFusionLossBatch
 from learning.densefusion import DenseFuseNet
-from learning.utils import compute_rre, compute_rte, OBJ_NAMES, OBJ_NAMES_TO_IDX, IDX_TO_OBJ_NAMES
+from learning.loss_batch import DenseFusionLossBatch, quat_to_rot
+from learning.utils import OBJ_NAMES, OBJ_NAMES_TO_IDX, IDX_TO_OBJ_NAMES
 from benchmark_utils.pose_evaluator import PoseEvaluator
+
+import torch
+import numpy as np
 
 import wandb
 import uuid
-
+import argparse
 from pathlib import Path
 import os
-import time
-
-
-LR_RATE = 0.3
-W_RATE = 0.3
 
 
 def get_success_metrics(R_pred, t_pred, c_pred, R_gt, t_gt, obj_idxs):
@@ -208,13 +200,6 @@ def train(
 
     # run train loop
     for epoch in range(epochs):
-
-        
-        if do_decay:
-            lr = lr * LR_RATE
-            loss_fn.module.w = loss_fn.module.w * W_RATE
-            optimizer = torch.optim.Adam(pnet.parameters(), lr=lr)
-
 
         print(f'Starting epoch {epoch}...')
 

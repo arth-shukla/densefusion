@@ -1,83 +1,17 @@
-import os
-import open3d as o3d
-import pickle
-from PIL import Image
-import random
-from pathlib import Path
-import numpy as np
-from tqdm import tqdm
-import trimesh
-import cv2
-import torch
 from segnet.unet import get_unet_cls
+from learning.utils import mask_to_bbox, get_bbox
 
-def mask_to_bbox(mask):
-    mask = mask.astype(np.uint8)
-    contours, _ = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+import torch
+import numpy as np
 
-
-    x = 0
-    y = 0
-    w = 0
-    h = 0
-    for contour in contours:
-        tmp_x, tmp_y, tmp_w, tmp_h = cv2.boundingRect(contour)
-        if tmp_w * tmp_h > w * h:
-            x = tmp_x
-            y = tmp_y
-            w = tmp_w
-            h = tmp_h
-    return [x, y, w, h]
-
-
-def get_bbox(bbox):
-    img_width = 720
-    img_length = 1280
-    step = 40
-    border_list = [-1] + np.arange(step, img_width+step+step, step=step).tolist()
-
-    bbx = [bbox[1], bbox[1] + bbox[3], bbox[0], bbox[0] + bbox[2]]
-    if bbx[0] < 0:
-        bbx[0] = 0
-    if bbx[1] >= img_width:
-        bbx[1] = img_width-1
-    if bbx[2] < 0:
-        bbx[2] = 0
-    if bbx[3] >= img_length:
-        bbx[3] = img_length-1                
-    rmin, rmax, cmin, cmax = bbx[0], bbx[1], bbx[2], bbx[3]
-    r_b = rmax - rmin
-    for tt in range(len(border_list)):
-        if r_b > border_list[tt] and r_b < border_list[tt + 1]:
-            r_b = border_list[tt + 1]
-            break
-    c_b = cmax - cmin
-    for tt in range(len(border_list)):
-        if c_b > border_list[tt] and c_b < border_list[tt + 1]:
-            c_b = border_list[tt + 1]
-            break
-    center = [int((rmin + rmax) / 2), int((cmin + cmax) / 2)]
-    rmin = center[0] - int(r_b / 2)
-    rmax = center[0] + int(r_b / 2)
-    cmin = center[1] - int(c_b / 2)
-    cmax = center[1] + int(c_b / 2)
-    if rmin < 0:
-        delt = -rmin
-        rmin = 0
-        rmax += delt
-    if cmin < 0:
-        delt = -cmin
-        cmin = 0
-        cmax += delt
-    if rmax > img_width:
-        delt = rmax - img_width
-        rmax = img_width
-        rmin -= delt
-    if cmax > img_length:
-        delt = cmax - img_length
-        cmax = img_length
-        cmin -= delt
-    return rmin, rmax, cmin, cmax
+import open3d as o3d
+import trimesh
+from PIL import Image
+from pathlib import Path
+import os
+import pickle
+import random
+from tqdm import tqdm
 
 
 def process_raw_data(output_dir = 'processed_data'):
