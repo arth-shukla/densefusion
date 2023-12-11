@@ -1,8 +1,3 @@
-import argparse
-from typing import Optional
-import torch
-import torch.nn as nn
-import numpy as np
 from learning.loss import DenseFusionLoss, quat_to_rot, global_pred_quat_to_rot
 from learning.densefusion import DenseFuseNet
 from learning.densefusion_refine import DenseRefinerFuseNet
@@ -10,9 +5,13 @@ from learning.utils import compute_rre, compute_rte
 from learning.utils import compute_rre, compute_rte, OBJ_NAMES, OBJ_NAMES_TO_IDX, IDX_TO_OBJ_NAMES
 from benchmark_utils.pose_evaluator import PoseEvaluator
 
+import torch
+import torch.nn as nn
+import numpy as np
+
 import wandb
 import uuid
-
+import argparse
 from pathlib import Path
 import os
 import time

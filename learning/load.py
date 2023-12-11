@@ -1,14 +1,17 @@
+from learning.utils import OBJ_NAMES, OBJ_NAMES_TO_IDX
+
+
 import torch
 from torch.utils.data import Dataset, DataLoader
 from torch.nn.utils.rnn import pad_sequence
-from learning.utils import OBJ_NAMES, OBJ_NAMES_TO_IDX
-from PIL import Image
 import numpy as np
-import pickle
 
+
+from PIL import Image
+import pickle
 import os
 from pathlib import Path
-from typing import Union
+from typing import List, Union
 
 class PoseDataset(Dataset):
     def __init__(
@@ -37,7 +40,7 @@ class PoseDataset(Dataset):
 
         # self.dps = [None] * len(self.obj_data)
 
-    def __getitem__(self, index):
+    def __getitem__(self, index) -> List[torch.Tensor]:
 
         rets = []
 

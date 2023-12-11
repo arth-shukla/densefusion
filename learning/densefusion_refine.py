@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.nn.utils.rnn import pad_sequence
 
 class SimpleRefinerFusingPointNet(nn.Module):
     def __init__(self):

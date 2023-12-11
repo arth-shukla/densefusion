@@ -1,12 +1,13 @@
+from learning.utils import OBJ_NAMES, OBJ_NAMES_TO_IDX
+
 import torch
 from torch.utils.data import Dataset, DataLoader
 from torch.nn.utils.rnn import pad_sequence
-from learning.utils import OBJ_NAMES, OBJ_NAMES_TO_IDX
-from PIL import Image
 import numpy as np
+
+from PIL import Image
 import pickle
 import random
-
 import os
 from pathlib import Path
 from typing import Union

@@ -231,3 +231,57 @@ def per_point_mse_loss(
     loss = loss.mean()
 
     return loss
+
+def quat_to_rot(bquats: torch.Tensor, base=1e-15):
+    """
+        bquats: Bs x Ps x 4
+        base: avoids zero-div error w/ norms when converting to unit quaternion
+
+        output: Bs x Ps x 3 x 3
+    """
+
+    bs, ps = bquats.size(0), bquats.size(1)
+
+    bquats += torch.tensor(base)
+    bquats = bquats / torch.norm(bquats, dim=2).view(bs, ps, 1)
+    pred_r = bquats
+
+    R = torch.cat([
+        (1.0 - 2.0*(pred_r[:, :, 2]**2 + pred_r[:, :, 3]**2)).view(bs, ps, 1),
+        (2.0*pred_r[:, :, 1]*pred_r[:, :, 2] - 2.0*pred_r[:, :, 0]*pred_r[:, :, 3]).view(bs, ps, 1),
+        (2.0*pred_r[:, :, 0]*pred_r[:, :, 2] + 2.0*pred_r[:, :, 1]*pred_r[:, :, 3]).view(bs, ps, 1),
+        (2.0*pred_r[:, :, 1]*pred_r[:, :, 2] + 2.0*pred_r[:, :, 3]*pred_r[:, :, 0]).view(bs, ps, 1),
+        (1.0 - 2.0*(pred_r[:, :, 1]**2 + pred_r[:, :, 3]**2)).view(bs, ps, 1),
+        (-2.0*pred_r[:, :, 0]*pred_r[:, :, 1] + 2.0*pred_r[:, :, 2]*pred_r[:, :, 3]).view(bs, ps, 1),
+        (-2.0*pred_r[:, :, 0]*pred_r[:, :, 2] + 2.0*pred_r[:, :, 1]*pred_r[:, :, 3]).view(bs, ps, 1),
+        (2.0*pred_r[:, :, 0]*pred_r[:, :, 1] + 2.0*pred_r[:, :, 2]*pred_r[:, :, 3]).view(bs, ps, 1),
+        (1.0 - 2.0*(pred_r[:, :, 1]**2 + pred_r[:, :, 2]**2)).view(bs, ps, 1)
+    ], dim=2).contiguous().view(bs, ps, 3, 3).contiguous()
+
+    return R
+
+
+def global_pred_like_df_loss(
+        R_pred: torch.Tensor, t_pred: torch.Tensor,
+        model: torch.Tensor, target: torch.Tensor,
+        reduction='mean',
+    ):
+    """
+       more like df loss
+    """
+
+    bs, ps = R_pred.size(0), R_pred.size(1)
+
+    Rps = R_pred.view(-1, 3, 3)
+    tps = t_pred.reshape(-1, 3)
+
+    pred_transform = torch.bmm(model, Rps.transpose(2, 1)) + tps.unsqueeze(1)
+
+    loss = torch.mean(torch.norm(pred_transform - target, dim=2), dim=1)
+
+    if reduction == 'mean':
+        loss = loss.mean()
+    if reduction == 'sum':
+        loss = loss.sum()
+
+    return loss
