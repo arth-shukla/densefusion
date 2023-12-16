@@ -198,3 +198,5 @@ processed_data_unet/
 processed_data_unet.tar.gz
 processed_occlusions_unet
 processed_occlusions_unet.tar.gz
+
+extra/
