@@ -78,7 +78,7 @@ def process_raw_data(output_dir = 'processed_data'):
         unet = get_unet_cls(bilinear=True)().to(device).eval()
         unet = torch.nn.parallel.DataParallel(unet, device_ids=list(range(torch.cuda.device_count())), dim=0)
         optimizer = torch.optim.Adam(unet.parameters(), lr=1e-4)
-        unet, optimizer = load_model(unet, optimizer, 'checkpoints/unet-final.pt', device=device)
+        unet, optimizer = load_model(unet, optimizer, 'select-checkpoints/unet.pt', device=device)
         unet = unet.module.to(device).eval()
 
         for scene in tqdm(scene_names):
