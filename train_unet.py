@@ -1,12 +1,12 @@
-import torch
-import torch.nn.functional as F
 from segnet.segnet import SegNet
 from segnet.unet import get_unet_cls
+
+import torch
+import torch.nn.functional as F
 import numpy as np
 
 import wandb
 import uuid
-
 from pathlib import Path
 import argparse
 import os
