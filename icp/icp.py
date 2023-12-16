@@ -68,7 +68,7 @@ def run_icp(source_pcd, target_pcd, max_attempts=10, max_iters=1000, finish_loop
 
         ps = source_pcd 
         # for retries:
-        # (1) move to point on 4*targ_rad ball around targ pcd
+        # (1) move to point on 2*targ_rad ball around targ pcd
         # (2) randomly rotate
         if attempt > 0:
             ps = ps - np.mean(ps, axis=0) + targ_center
