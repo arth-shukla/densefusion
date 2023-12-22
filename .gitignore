@@ -200,3 +200,5 @@ processed_occlusions_unet
 processed_occlusions_unet.tar.gz
 
 extra/
+
+.DS_Store
