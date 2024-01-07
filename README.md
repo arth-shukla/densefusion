@@ -46,7 +46,7 @@ Unlike the original DenseFusion paper [[2]](#2) which only uses Chamfer and per-
 
 1. Chamfer distance for objects with infinite order symmetries
 2. min-of-n loss for objects with finite order symmetries
-3. simple per-point MSE for object with no symmetries
+3. simple per-point MSE for objects with no symmetries
 
 Furthermore, since Chamfer distance is known to get stuck in suboptimal local minima, I introduce a hyperparameter `min_over_cham` between 0 and 1 which represents the probability that min-of-n loss will be used over Chamfer distance for objects with infinite order symmetries.
 
