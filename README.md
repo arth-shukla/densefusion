@@ -25,7 +25,7 @@ AI Development: Pytorch (Torch, Cuda, Datasets, DataLoaders, DataParallel), Wand
 
 ### UNet Semantic Segmentation
 
-We use a UNet for semantic segmentation on the RGB images. In this dataset, there are at most one instance of each object in a particular scene arragnement, so semantic segmentation is sufficient, and instance segmentation is not necessary. We use the segementation mask to get a depth-lifted point cloud (using camera intrinsic and extrinsic) and to crop the RGB image.
+We use a UNet for semantic segmentation on the RGB images. In this dataset, there are at most one instance of each object in a particular scene arrangement, so semantic segmentation is sufficient, and instance segmentation is not necessary. We use the segementation mask to get a depth-lifted point cloud (using camera intrinsic and extrinsic) and to crop the RGB image.
 
 ### DenseFusion (+ ICP Refinement) Architecture
 
